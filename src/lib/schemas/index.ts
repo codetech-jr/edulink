@@ -1,0 +1,7 @@
+export * from './payment.schema'
+export * from './billing.schema'
+export * from './student.schema'
+export * from './course.schema'
+export * from './communication.schema'
+export * from './teacher.schema'
+export * from './enrollment.schema'

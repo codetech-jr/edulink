@@ -47,7 +47,7 @@ export function EvaluationPlanForm({
     setEvaluations(evaluations.filter((_, i) => i !== index))
   }
 
-  const handleChange = (index: number, field: keyof EvaluationItem, value: any) => {
+  const handleChange = (index: number, field: keyof EvaluationItem, value: any /* TODO: tipado pendiente */) => {
     const updated = [...evaluations]
     if (field === 'weight') {
       // Permitir números o dejar vacío provisionalmente

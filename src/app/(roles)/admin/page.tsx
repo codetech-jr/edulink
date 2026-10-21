@@ -1,193 +1,178 @@
-import { createClient } from '@/utils/supabase/server'
+import { Suspense } from 'react'
 import Link from 'next/link'
+import { createClient } from '@/utils/supabase/server'
+import { redirect } from 'next/navigation'
 import {
+  Calendar,
   Users,
   CreditCard,
   BookOpen,
-  TrendingUp,
-  ArrowUpRight,
-  Calendar,
   Receipt,
   Megaphone,
+  UserCheck,
+  ArrowUpRight,
 } from 'lucide-react'
+
+import { AlertBanners } from './_components/AlertBanners'
+import { FinancialKPIs } from './_components/FinancialKPIs'
+import { RevenueChart } from './_components/RevenueChart'
+import { EnrollmentBar } from './_components/EnrollmentBar'
+import { ActivityFeed } from './_components/ActivityFeed'
+import {
+  FinancialKPIsSkeleton,
+  RevenueChartSkeleton,
+  EnrollmentBarSkeleton,
+  ActivityFeedSkeleton,
+} from './_components/DashboardSkeletons'
+
+export const metadata = {
+  title: 'Panel de Control | EduLink',
+  description: 'Panel de gestión y administración escolar.',
+}
 
 export default async function AdminDashboardPage() {
   const supabase = await createClient()
 
-  // Auth is already handled by layout.tsx — we just need the user for queries
+  // 1. Verificar sesión
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
+  if (!user) {
+    redirect('/login')
+  }
+
+  // 2. Obtener perfil
   const { data: profile } = await supabase
     .from('profiles')
     .select('full_name, school_id')
-    .eq('id', user!.id)
+    .eq('id', user.id)
     .single()
 
-  const displayName = profile?.full_name ?? 'Administrador'
   const schoolId = profile?.school_id ?? ''
+  const displayName = profile?.full_name ?? 'Administrador'
 
-  // ── Statistics queries ─────────────────────────────────
-  const { count: studentCount } = await supabase
-    .from('students')
-    .select('*', { count: 'exact', head: true })
-    .eq('school_id', schoolId)
-
-  const { count: courseCount } = await supabase
-    .from('courses')
-    .select('*', { count: 'exact', head: true })
-    .eq('school_id', schoolId)
-
-  const today = new Date().toISOString().split('T')[0]
-  const { count: paymentsTodayCount } = await supabase
-    .from('payments')
-    .select('*', { count: 'exact', head: true })
-    .eq('school_id', schoolId)
-    .eq('transaction_date', today)
-
-  // ── Format current date ────────────────────────────────
+  // 3. Formatear fecha actual en español de Venezuela
   const dateFormatter = new Intl.DateTimeFormat('es-VE', {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
+    year: 'numeric',
   })
   const formattedDate =
     dateFormatter.format(new Date()).charAt(0).toUpperCase() +
     dateFormatter.format(new Date()).slice(1)
 
-  // ── Stat card definitions ──────────────────────────────
-  const stats = [
-    {
-      label: 'Estudiantes',
-      value: studentCount ?? 0,
-      icon: Users,
-      color: 'indigo' as const,
-      href: '/admin/students',
-    },
-    {
-      label: 'Cursos Activos',
-      value: courseCount ?? 0,
-      icon: BookOpen,
-      color: 'amber' as const,
-      href: '/admin/courses',
-    },
-    {
-      label: 'Pagos Hoy',
-      value: paymentsTodayCount ?? 0,
-      icon: CreditCard,
-      color: 'emerald' as const,
-      href: '/admin/payments',
-    },
-  ]
-
-  const colorMap = {
-    indigo: {
-      bg: 'bg-indigo-50',
-      text: 'text-indigo-600',
-      badge: 'bg-indigo-100 text-indigo-600',
-    },
-    amber: {
-      bg: 'bg-amber-50',
-      text: 'text-amber-600',
-      badge: 'bg-amber-100 text-amber-600',
-    },
-    emerald: {
-      bg: 'bg-emerald-50',
-      text: 'text-emerald-600',
-      badge: 'bg-emerald-100 text-emerald-600',
-    },
-  }
-
-  // ── Quick action links ─────────────────────────────────
+  // 4. Módulos de acceso rápido
   const quickLinks = [
     {
-      label: 'Gestionar Alumnado',
-      description: 'Inscripciones, perfiles y registros académicos',
-      href: '/admin/students',
-      icon: Users,
-    },
-    {
       label: 'Control de Pagos',
-      description: 'Mensualidades, facturación y reportes',
+      description: 'Conciliación, recibos y morosidad',
       href: '/admin/payments',
       icon: CreditCard,
     },
     {
-      label: 'Aranceles y Financiamiento',
-      description: 'Configuración de tarifas y planes de pago',
+      label: 'Alumnado',
+      description: 'Expedientes y datos de contacto',
+      href: '/admin/students',
+      icon: Users,
+    },
+    {
+      label: 'Cursos y Grados',
+      description: 'Secciones, materias y profesores',
+      href: '/admin/courses',
+      icon: BookOpen,
+    },
+    {
+      label: 'Aranceles y Cobranza',
+      description: 'Conceptos de pago y mensualidades',
       href: '/admin/billing',
       icon: Receipt,
     },
     {
-      label: 'Comunicados Oficiales',
-      description: 'Anuncios, circulares y notificaciones',
+      label: 'Comunicados',
+      description: 'Circulares y avisos oficiales',
       href: '/admin/comunicados',
       icon: Megaphone,
+    },
+    {
+      label: 'Usuarios y Personal',
+      description: 'Profesores, coordinadores y roles',
+      href: '/admin/usuarios',
+      icon: UserCheck,
     },
   ]
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8">
-      {/* ── Greeting ──────────────────────────────────────── */}
-      <div>
-        <div className="flex items-center gap-2 text-[13px] text-zinc-400 mb-1.5">
-          <Calendar className="h-3.5 w-3.5" strokeWidth={1.8} />
-          {formattedDate}
+    <div className="space-y-6 max-w-7xl mx-auto">
+      {/* ── Encabezado y Saludo ─────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-zinc-200/70">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-medium text-zinc-400 mb-1">
+            <Calendar className="h-3.5 w-3.5 text-zinc-400" />
+            <span>{formattedDate}</span>
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
+            Bienvenido, {displayName}
+          </h1>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            Resumen operativo y financiero de la institución.
+          </p>
         </div>
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">
-          Bienvenido, {displayName}
-        </h1>
-        <p className="mt-1 text-[14.5px] text-zinc-400">
-          Resumen de tu gestión institucional.
-        </p>
+
+        <div className="flex items-center gap-2.5">
+          <Link
+            href="/admin/payments"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs transition-colors"
+          >
+            <CreditCard className="h-3.5 w-3.5" />
+            <span>Ver Cobranzas</span>
+          </Link>
+          <Link
+            href="/admin/students"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-zinc-700 bg-white hover:bg-zinc-50 border border-zinc-200 rounded-lg shadow-xs transition-colors"
+          >
+            <Users className="h-3.5 w-3.5 text-zinc-500" />
+            <span>Matrícula</span>
+          </Link>
+        </div>
       </div>
 
-      {/* ── Stat Cards ────────────────────────────────────── */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {stats.map((stat) => {
-          const Icon = stat.icon
-          const colors = colorMap[stat.color]
+      {/* ── 1. Alertas Prioritarias (Streaming sin fallback bloqueante) ── */}
+      <Suspense fallback={null}>
+        <AlertBanners schoolId={schoolId} />
+      </Suspense>
 
-          return (
-            <Link
-              key={stat.label}
-              href={stat.href}
-              className="group relative rounded-xl border border-zinc-200/80 bg-white p-5 transition-all duration-200 hover:border-zinc-300 hover:shadow-sm"
-            >
-              <div className="flex items-start justify-between">
-                <div className={`rounded-lg p-2.5 ${colors.bg}`}>
-                  <Icon
-                    className={`h-[18px] w-[18px] ${colors.text}`}
-                    strokeWidth={1.8}
-                  />
-                </div>
-                <ArrowUpRight className="h-4 w-4 text-zinc-300 opacity-0 transition-all duration-200 group-hover:opacity-100 group-hover:text-zinc-500" />
-              </div>
+      {/* ── 2. KPIs Financieros (Streaming con Skeleton individual) ── */}
+      <Suspense fallback={<FinancialKPIsSkeleton />}>
+        <FinancialKPIs schoolId={schoolId} />
+      </Suspense>
 
-              <div className="mt-4">
-                <span className="text-[28px] font-semibold leading-none tracking-tight text-zinc-900">
-                  {stat.value}
-                </span>
-                <p className="mt-1.5 text-[13px] font-medium text-zinc-400">
-                  {stat.label}
-                </p>
-              </div>
-            </Link>
-          )
-        })}
+      {/* ── 3. Analítica Visual: Gráfico de Ingresos + Distribución ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Suspense fallback={<RevenueChartSkeleton />}>
+          <RevenueChart schoolId={schoolId} />
+        </Suspense>
+
+        <Suspense fallback={<EnrollmentBarSkeleton />}>
+          <EnrollmentBar schoolId={schoolId} />
+        </Suspense>
       </div>
 
-      {/* ── Quick Access Modules ──────────────────────────── */}
-      <div>
-        <div className="mb-4 flex items-center gap-2">
-          <TrendingUp className="h-4 w-4 text-zinc-400" strokeWidth={1.8} />
-          <h2 className="text-[13px] font-semibold uppercase tracking-wider text-zinc-400">
-            Acceso Rápido
+      {/* ── 4. Feed de Actividad: Pagos Recientes + Comunicados ── */}
+      <Suspense fallback={<ActivityFeedSkeleton />}>
+        <ActivityFeed schoolId={schoolId} />
+      </Suspense>
+
+      {/* ── 5. Módulos de Acceso Rápido ── */}
+      <div className="pt-2">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+            Módulos de Gestión
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {quickLinks.map((link) => {
             const Icon = link.icon
 
@@ -195,23 +180,23 @@ export default async function AdminDashboardPage() {
               <Link
                 key={link.href}
                 href={link.href}
-                className="group flex items-center gap-4 rounded-xl border border-zinc-200/80 bg-white px-5 py-4 transition-all duration-200 hover:border-zinc-300 hover:shadow-sm"
+                className="group flex items-center gap-3.5 rounded-xl border border-zinc-200/80 bg-white px-4 py-3.5 shadow-xs transition-all duration-200 hover:border-zinc-300 hover:shadow-sm"
               >
-                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-zinc-50 transition-colors duration-200 group-hover:bg-indigo-50">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-zinc-50 transition-colors duration-200 group-hover:bg-indigo-50">
                   <Icon
-                    className="h-[18px] w-[18px] text-zinc-400 transition-colors duration-200 group-hover:text-indigo-600"
+                    className="h-4 w-4 text-zinc-400 transition-colors duration-200 group-hover:text-indigo-600"
                     strokeWidth={1.8}
                   />
                 </div>
-                <div className="min-w-0">
-                  <p className="text-[14px] font-medium text-zinc-800 group-hover:text-zinc-900">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold text-zinc-800 group-hover:text-zinc-900 truncate">
                     {link.label}
                   </p>
-                  <p className="mt-0.5 truncate text-[12.5px] text-zinc-400">
+                  <p className="truncate text-2xs text-zinc-400 mt-0.5">
                     {link.description}
                   </p>
                 </div>
-                <ArrowUpRight className="ml-auto h-4 w-4 flex-shrink-0 text-zinc-300 opacity-0 transition-all duration-200 group-hover:opacity-100 group-hover:text-zinc-500" />
+                <ArrowUpRight className="h-4 w-4 shrink-0 text-zinc-300 opacity-0 transition-all duration-200 group-hover:opacity-100 group-hover:text-zinc-500" />
               </Link>
             )
           })}

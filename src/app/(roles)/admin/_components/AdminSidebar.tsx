@@ -5,22 +5,37 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { logoutAction } from '@/actions/auth-actions'
 import { cn } from '@/utils/cn'
+import { isDirectorOnly, type AppRole } from '@/lib/permissions'
 import {
   LayoutDashboard,
   Users,
   CreditCard,
+  AlertCircle,
   Receipt,
   Megaphone,
+  BookOpen,
+  UserCog,
+  UserPlus,
   LogOut,
   Menu,
   X,
+  Lock,
 } from 'lucide-react'
 
 interface AdminSidebarProps {
   displayName: string
+  roleLabel: string
+  role: AppRole
 }
 
-const NAV_ITEMS = [
+type NavItem = {
+  label: string
+  href: string
+  icon: React.ElementType
+  directorOnly?: boolean  // Si true, se oculta para coordinadores
+}
+
+const NAV_ITEMS: NavItem[] = [
   {
     label: 'Dashboard',
     href: '/admin',
@@ -32,9 +47,19 @@ const NAV_ITEMS = [
     icon: Users,
   },
   {
+    label: 'Inscripciones',
+    href: '/admin/inscripciones',
+    icon: UserPlus,
+  },
+  {
     label: 'Control Pagos',
     href: '/admin/payments',
     icon: CreditCard,
+  },
+  {
+    label: 'Morosidad',
+    href: '/admin/morosidad',
+    icon: AlertCircle,
   },
   {
     label: 'Aranceles',
@@ -42,9 +67,20 @@ const NAV_ITEMS = [
     icon: Receipt,
   },
   {
+    label: 'Cursos',
+    href: '/admin/courses',
+    icon: BookOpen,
+  },
+  {
     label: 'Comunicados',
     href: '/admin/comunicados',
     icon: Megaphone,
+  },
+  {
+    label: 'Usuarios',
+    href: '/admin/usuarios',
+    icon: UserCog,
+    directorOnly: true,  // Solo el director puede gestionar usuarios
   },
 ]
 
@@ -53,7 +89,7 @@ function NavLink({
   isActive,
   onClick,
 }: {
-  item: (typeof NAV_ITEMS)[number]
+  item: NavItem
   isActive: boolean
   onClick?: () => void
 }) {
@@ -84,14 +120,20 @@ function NavLink({
   )
 }
 
-export function AdminSidebar({ displayName }: AdminSidebarProps) {
+export function AdminSidebar({ displayName, roleLabel, role }: AdminSidebarProps) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const isDirector = isDirectorOnly(role)
 
   const isActive = (href: string) => {
     if (href === '/admin') return pathname === '/admin'
     return pathname.startsWith(href)
   }
+
+  // Filtrar ítems según el rol: coordinador no ve los directorOnly
+  const visibleNavItems = NAV_ITEMS.filter(
+    (item) => !item.directorOnly || isDirector
+  )
 
   const sidebarContent = (
     <>
@@ -105,7 +147,7 @@ export function AdminSidebar({ displayName }: AdminSidebarProps) {
             EduLink
           </span>
           <span className="text-[10.5px] font-medium text-zinc-400 leading-none">
-            Panel Admin
+            Panel Administrativo
           </span>
         </div>
       </div>
@@ -115,7 +157,7 @@ export function AdminSidebar({ displayName }: AdminSidebarProps) {
 
       {/* Navigation Links */}
       <nav className="flex flex-1 flex-col gap-0.5 px-2">
-        {NAV_ITEMS.map((item) => (
+        {visibleNavItems.map((item) => (
           <NavLink
             key={item.href}
             item={item}
@@ -125,17 +167,22 @@ export function AdminSidebar({ displayName }: AdminSidebarProps) {
         ))}
       </nav>
 
-      {/* Bottom Section: User + Logout */}
+      {/* Bottom Section: Role badge + User + Logout */}
       <div className="mt-auto border-t border-zinc-100 px-3 pb-4 pt-4">
         <div className="mb-3 flex items-center gap-2.5 px-1">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100 text-[12px] font-semibold text-zinc-600">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100 text-[12px] font-semibold text-zinc-600 flex-shrink-0">
             {displayName.charAt(0).toUpperCase()}
           </div>
           <div className="flex flex-col min-w-0">
             <span className="truncate text-[13px] font-medium text-zinc-800">
               {displayName}
             </span>
-            <span className="text-[11px] text-zinc-400">Administrador</span>
+            <span className="flex items-center gap-1 text-[11px] text-zinc-400">
+              {!isDirector && (
+                <Lock className="h-2.5 w-2.5 text-zinc-300" strokeWidth={2} />
+              )}
+              {roleLabel}
+            </span>
           </div>
         </div>
         <form action={logoutAction}>

@@ -20,7 +20,7 @@ export function CourseCardActions({ courseId, courseName }: CourseCardActionsPro
     try {
       await deleteCourse(courseId)
       setShowConfirm(false)
-    } catch (error: any) {
+    } catch (error: any /* TODO: tipado pendiente */) {
       alert(error.message || 'Error al eliminar el curso')
     } finally {
       setIsDeleting(false)

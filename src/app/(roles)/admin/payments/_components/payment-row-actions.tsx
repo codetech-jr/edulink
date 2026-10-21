@@ -29,7 +29,7 @@ export function PaymentRowActions({
       startTransition(async () => {
         try {
           await approvePaymentAction(paymentId)
-        } catch (err: any) {
+        } catch (err: any /* TODO: tipado pendiente */) {
           setError(err.message || 'Error al aprobar el pago')
           alert(err.message || 'Error al aprobar el pago')
         }
@@ -50,7 +50,7 @@ export function PaymentRowActions({
         await rejectPaymentAction(paymentId, reason)
         setShowRejectModal(false)
         setReason('')
-      } catch (err: any) {
+      } catch (err: any /* TODO: tipado pendiente */) {
         setError(err.message || 'Error al rechazar el pago')
       }
     })

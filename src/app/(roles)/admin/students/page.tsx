@@ -122,16 +122,16 @@ export default async function StudentsManagementPage({
               <table className="w-full text-left">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100">
-                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Estudiante</th>
-                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Cédula</th>
-                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Curso</th>
-                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Estado</th>
-                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Acciones</th>
+                    <th scope="col" className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Estudiante</th>
+                    <th scope="col" className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Cédula</th>
+                    <th scope="col" className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Curso</th>
+                    <th scope="col" className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Estado</th>
+                    <th scope="col" className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {studentList.map((student: any) => {
-                    const course = student.courses as any
+                    const course = student.courses as any /* TODO: tipado pendiente */
                     const courseName = course
                       ? `${course.grade_level}° "${course.section}" - ${course.name}`
                       : 'Sin asignar'

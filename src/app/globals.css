@@ -1,19 +1,32 @@
+/* ── Google Font: Inter ── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ── Google Font: Inter ── */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* ── Paleta Oxford Moderno ── */
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --primary: #1e3a8a;
+  --primary-hover: #1e40af;
+  --secondary: #059669;
+  --accent: #d97706;
+  --neutral-bg: #f8fafc;
+  --neutral-text: #0f172a;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #0f172a;
+    --foreground: #f8fafc;
+    --primary: #1e40af;
+    --primary-hover: #1e3a8a;
+    --secondary: #059669;
+    --accent: #d97706;
+    --neutral-bg: #0f172a;
+    --neutral-text: #f8fafc;
   }
 }
 

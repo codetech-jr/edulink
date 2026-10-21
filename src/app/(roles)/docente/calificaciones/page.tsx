@@ -37,26 +37,35 @@ export default async function CalificacionesPage({ searchParams }: PageProps) {
     redirect('/login')
   }
 
-  // 3. Obtener asignaturas a cargo del docente
-  const { data: subjects, error: subjectsError } = await supabase
-    .from('subjects')
-    .select(`
-      id,
-      name,
-      courses (
+  // 3. Obtener asignaturas y año escolar activo en paralelo
+  const [subjectsResult, schoolYearResult] = await Promise.all([
+    supabase
+      .from('subjects')
+      .select(`
         id,
         name,
-        grade_level,
-        section
-      )
-    `)
-    .eq('teacher_id', user.id)
+        courses (
+          id,
+          name,
+          grade_level,
+          section
+        )
+      `)
+      .eq('teacher_id', user.id),
+    supabase
+      .from('school_years')
+      .select('id')
+      .eq('school_id', profile.school_id)
+      .eq('is_active', true)
+      .single(),
+  ])
 
-  if (subjectsError) {
-    console.error('Error al cargar materias:', subjectsError)
+  const subjects = subjectsResult.data
+  if (subjectsResult.error) {
+    console.error('Error al cargar materias:', subjectsResult.error)
   }
 
-  const normalizedSubjects = (subjects || []).map((sub: any) => {
+  const normalizedSubjects = (subjects || []).map((sub: any /* TODO: tipado pendiente */) => {
     let courseData = sub.courses
     if (Array.isArray(courseData)) {
       courseData = courseData[0] || null
@@ -75,15 +84,9 @@ export default async function CalificacionesPage({ searchParams }: PageProps) {
     }
   })
 
-  // 4. Obtener el año escolar activo y los lapsos (terms)
-  const { data: schoolYear } = await supabase
-    .from('school_years')
-    .select('id')
-    .eq('school_id', profile.school_id)
-    .eq('is_active', true)
-    .single()
-
-  let terms: any[] = []
+  // 4. Obtener los lapsos (terms) del año escolar
+  const schoolYear = schoolYearResult.data
+  let terms: any[] = [] /* TODO: tipado pendiente */
   if (schoolYear) {
     const { data: termsData } = await supabase
       .from('terms')
@@ -100,33 +103,35 @@ export default async function CalificacionesPage({ searchParams }: PageProps) {
   const selectedSubject = normalizedSubjects.find((s) => s.id === selectedSubjectId)
   const selectedTerm = terms.find((t) => t.id === selectedTermId)
 
-  // 6. Consultar plan de evaluación y estudiantes de la materia seleccionada
-  let students: any[] = []
-  let evaluations: any[] = []
-  let grades: any[] = []
+  // 6. Consultar plan de evaluación y estudiantes en paralelo
+  let students: any[] = [] /* TODO: tipado pendiente */
+  let evaluations: any[] = [] /* TODO: tipado pendiente */
+  let grades: any[] = [] /* TODO: tipado pendiente */
   let totalWeight = 0
   let isPlanComplete = false
 
   if (selectedSubjectId && selectedTermId) {
     const courseId = selectedSubject?.courses?.id
 
-    if (courseId) {
-      const { data: studentsData } = await supabase
-        .from('students')
-        .select('id, full_name, list_number')
-        .eq('course_id', courseId)
-        .eq('is_active', true)
-        .order('list_number', { ascending: true })
-      students = studentsData || []
-    }
+    const [studentsResult, evResult] = await Promise.all([
+      courseId
+        ? supabase
+            .from('students')
+            .select('id, full_name, list_number')
+            .eq('course_id', courseId)
+            .eq('is_active', true)
+            .order('list_number', { ascending: true })
+        : Promise.resolve({ data: [] }),
+      supabase
+        .from('evaluations')
+        .select('id, name, weight, is_published, evaluation_date')
+        .eq('subject_id', selectedSubjectId)
+        .eq('term_id', selectedTermId)
+        .order('created_at', { ascending: true }),
+    ])
 
-    const { data: evData } = await supabase
-      .from('evaluations')
-      .select('id, name, weight, is_published, evaluation_date')
-      .eq('subject_id', selectedSubjectId)
-      .eq('term_id', selectedTermId)
-      .order('created_at', { ascending: true })
-    evaluations = evData || []
+    students = studentsResult.data || []
+    evaluations = evResult.data || []
 
     totalWeight = evaluations.reduce((sum, ev) => sum + Number(ev.weight || 0), 0)
     isPlanComplete = totalWeight === 100

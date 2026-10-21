@@ -3,20 +3,33 @@
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { revalidatePath } from 'next/cache'
+import { isAdminRole } from '@/lib/permissions'
+import { CreateBillingConceptSchema } from '@/lib/schemas/billing.schema'
 
 export async function createBillingConceptAction(
   prevState: { error: string | null; success?: boolean },
   formData: FormData
 ): Promise<{ error: string | null; success?: boolean }> {
+  // 1. Validar campos del formulario con Zod
+  const rawData = Object.fromEntries(formData.entries())
+  const validation = CreateBillingConceptSchema.safeParse(rawData)
+
+  if (!validation.success) {
+    return { error: validation.error.issues[0].message, success: false }
+  }
+
   const supabase = await createClient()
 
-  // 1. Verificar sesión de usuario
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  // 2. Verificar sesión de usuario
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
   if (authError || !user) {
     return { error: 'No autorizado. Inicia sesión nuevamente.', success: false }
   }
 
-  // 2. Obtener school_id y rol del perfil del administrador (inyección segura en el servidor)
+  // 3. Obtener school_id y rol del perfil (inyección segura en el servidor)
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('school_id, role')
@@ -27,28 +40,13 @@ export async function createBillingConceptAction(
     return { error: 'No se pudo determinar la institución asociada.', success: false }
   }
 
-  // Verificar rol administrativo
-  const allowedRoles = ['admin', 'director', 'coordinador', 'secretaria']
-  if (!profile.role || !allowedRoles.includes(profile.role)) {
+  // Verificar rol administrativo (admin o coordinador)
+  if (!isAdminRole(profile.role)) {
     return { error: 'No tienes permisos suficientes para realizar esta operación.', success: false }
   }
 
-  // 3. Extraer y validar campos del formulario
-  const name = (formData.get('name') as string)?.trim()
-  const amountRaw = formData.get('amount_usd') as string
-  const dueDate = formData.get('due_date') as string // YYYY-MM-DD
-
-  if (!name || !amountRaw) {
-    return { error: 'Todos los campos obligatorios deben ser completados.', success: false }
-  }
-
-  const amountUsd = parseFloat(amountRaw)
-  if (isNaN(amountUsd) || amountUsd <= 0) {
-    return { error: 'El monto debe ser un número válido mayor a cero.', success: false }
-  }
-
-  // Mapear fecha de vencimiento a la columna description
-  const description = dueDate ? `Vence: ${dueDate}` : ''
+  const { name, amount_usd, due_date } = validation.data
+  const description = due_date ? `Vence: ${due_date}` : ''
 
   // 4. Insertar el registro utilizando el cliente Admin para saltar las restricciones de RLS
   const adminSupabase = createAdminClient()
@@ -56,11 +54,11 @@ export async function createBillingConceptAction(
     .from('billing_concepts')
     .insert({
       school_id: profile.school_id,
-      name: name,
-      amount_usd: amountUsd,
-      description: description,
-      is_recurring: false, // Valor por defecto
-      is_active: true
+      name,
+      amount_usd,
+      description,
+      is_recurring: false,
+      is_active: true,
     })
 
   if (insertError) {

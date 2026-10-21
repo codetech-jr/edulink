@@ -145,10 +145,10 @@ export default async function BillingPage() {
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-gray-50/70 border-b border-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">
-                        <th className="px-6 py-4">Concepto</th>
-                        <th className="px-6 py-4">Monto (USD)</th>
-                        <th className="px-6 py-4">Vencimiento</th>
-                        <th className="px-6 py-4">Estado</th>
+                        <th scope="col" className="px-6 py-4">Concepto</th>
+                        <th scope="col" className="px-6 py-4">Monto (USD)</th>
+                        <th scope="col" className="px-6 py-4">Vencimiento</th>
+                        <th scope="col" className="px-6 py-4">Estado</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-sm font-medium text-gray-900">

@@ -51,7 +51,7 @@ export function CourseForm({ initialData }: CourseFormProps = {}) {
       } else {
         await createCourse(formData)
       }
-    } catch (e: any) {
+    } catch (e: any /* TODO: tipado pendiente */) {
       setError(e.message || 'Error al guardar el curso')
     }
   }

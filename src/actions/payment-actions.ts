@@ -3,28 +3,47 @@
 import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { isAdminRole } from '@/lib/permissions'
+import {
+  ApprovePaymentSchema,
+  RejectPaymentSchema,
+  UpdateExchangeRateSchema,
+  CreatePaymentSchema,
+} from '@/lib/schemas/payment.schema'
 
 /**
  * Aprueba un pago marcando su estado como 'confirmado'
  */
 export async function approvePaymentAction(paymentId: string) {
+  const validation = ApprovePaymentSchema.safeParse({ payment_id: paymentId })
+  if (!validation.success) {
+    throw new Error(validation.error.issues[0].message)
+  }
+
   const supabase = await createClient()
 
   // 1. Verificar sesión de usuario
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
   if (authError || !user) {
     throw new Error('No autorizado')
   }
 
-  // 2. Obtener school_id del perfil del administrador
+  // 2. Obtener school_id y rol del perfil del administrador
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('school_id')
+    .select('school_id, role')
     .eq('id', user.id)
     .single()
 
   if (profileError || !profile?.school_id) {
     throw new Error('No se pudo determinar la institución asociada')
+  }
+
+  if (!isAdminRole(profile.role)) {
+    throw new Error('No tienes permisos suficientes para realizar esta operación')
   }
 
   // 3. Actualizar el pago verificando estrictamente la pertenencia al school_id (RLS / Multitenancy)
@@ -34,9 +53,9 @@ export async function approvePaymentAction(paymentId: string) {
       status: 'confirmado',
       processed_by: user.id,
       processed_at: new Date().toISOString(),
-      rejection_reason: null // Limpiar el motivo de rechazo si existiera
+      rejection_reason: null,
     })
-    .eq('id', paymentId)
+    .eq('id', validation.data.payment_id)
     .eq('school_id', profile.school_id)
 
   if (updateError) {
@@ -56,27 +75,38 @@ export async function approvePaymentAction(paymentId: string) {
  * Rechaza un pago con un motivo específico
  */
 export async function rejectPaymentAction(paymentId: string, reason: string) {
-  const supabase = await createClient()
-
-  if (!reason || reason.trim() === '') {
-    throw new Error('El motivo de rechazo es obligatorio')
+  const validation = RejectPaymentSchema.safeParse({
+    payment_id: paymentId,
+    reason,
+  })
+  if (!validation.success) {
+    throw new Error(validation.error.issues[0].message)
   }
 
+  const supabase = await createClient()
+
   // 1. Verificar sesión de usuario
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
   if (authError || !user) {
     throw new Error('No autorizado')
   }
 
-  // 2. Obtener school_id del perfil del administrador
+  // 2. Obtener school_id y rol del perfil del administrador
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('school_id')
+    .select('school_id, role')
     .eq('id', user.id)
     .single()
 
   if (profileError || !profile?.school_id) {
     throw new Error('No se pudo determinar la institución asociada')
+  }
+
+  if (!isAdminRole(profile.role)) {
+    throw new Error('No tienes permisos suficientes para realizar esta operación')
   }
 
   // 3. Actualizar el pago
@@ -86,9 +116,9 @@ export async function rejectPaymentAction(paymentId: string, reason: string) {
       status: 'rechazado',
       processed_by: user.id,
       processed_at: new Date().toISOString(),
-      rejection_reason: reason.trim()
+      rejection_reason: validation.data.reason,
     })
-    .eq('id', paymentId)
+    .eq('id', validation.data.payment_id)
     .eq('school_id', profile.school_id)
 
   if (updateError) {
@@ -108,22 +138,26 @@ export async function rejectPaymentAction(paymentId: string, reason: string) {
  * Inserta o actualiza la tasa de cambio BCV del día actual
  */
 export async function updateExchangeRateAction(rate: number) {
-  const supabase = await createClient()
-
-  if (!rate || isNaN(rate) || rate <= 0) {
-    throw new Error('La tasa de cambio debe ser un número válido mayor a cero')
+  const validation = UpdateExchangeRateSchema.safeParse({ rate })
+  if (!validation.success) {
+    throw new Error(validation.error.issues[0].message)
   }
 
+  const supabase = await createClient()
+
   // 1. Verificar sesión de usuario
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
   if (authError || !user) {
     throw new Error('No autorizado')
   }
 
-  // 2. Obtener school_id
+  // 2. Obtener school_id y rol
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('school_id')
+    .select('school_id, role')
     .eq('id', user.id)
     .single()
 
@@ -131,7 +165,11 @@ export async function updateExchangeRateAction(rate: number) {
     throw new Error('No se pudo determinar la institución asociada')
   }
 
-  // 3. Verificar si ya existe una tasa para hoy (según zona horaria UTC/local del servidor)
+  if (!isAdminRole(profile.role)) {
+    throw new Error('No tienes permisos suficientes para realizar esta operación')
+  }
+
+  // 3. Verificar si ya existe una tasa para hoy
   const todayStr = new Date().toISOString().split('T')[0]
 
   const { data: existingRate, error: selectError } = await supabase
@@ -150,8 +188,8 @@ export async function updateExchangeRateAction(rate: number) {
     const { error: updateError } = await supabase
       .from('exchange_rates')
       .update({
-        rate: rate,
-        created_by: user.id
+        rate: validation.data.rate,
+        created_by: user.id,
       })
       .eq('id', existingRate.id)
       .eq('school_id', profile.school_id)
@@ -167,11 +205,11 @@ export async function updateExchangeRateAction(rate: number) {
       .insert({
         school_id: profile.school_id,
         rate_date: todayStr,
-        rate: rate,
+        rate: validation.data.rate,
         created_by: user.id,
         currency_from: 'USD',
         currency_to: 'VES',
-        source: 'BCV'
+        source: 'BCV',
       })
 
     if (insertError) {
@@ -194,18 +232,29 @@ export async function createPaymentAction(
   prevState: { error: string | null },
   formData: FormData
 ): Promise<{ error: string | null }> {
+  // 1. Validar datos del formulario con Zod
+  const rawData = Object.fromEntries(formData.entries())
+  const validation = CreatePaymentSchema.safeParse(rawData)
+
+  if (!validation.success) {
+    return { error: validation.error.issues[0].message }
+  }
+
   const supabase = await createClient()
 
-  // 1. Verificar sesión de usuario
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  // 2. Verificar sesión de usuario
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
   if (authError || !user) {
     return { error: 'No autorizado. Inicia sesión nuevamente.' }
   }
 
-  // 2. Obtener school_id del perfil del administrador (inyección segura en servidor)
+  // 3. Obtener school_id y rol del perfil del administrador (inyección segura en servidor)
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('school_id')
+    .select('school_id, role')
     .eq('id', user.id)
     .single()
 
@@ -213,47 +262,31 @@ export async function createPaymentAction(
     return { error: 'No se pudo determinar la institución asociada.' }
   }
 
-  // 3. Extraer y validar campos del formulario
-  const studentId = formData.get('student_id') as string
-  const paymentMethod = formData.get('payment_method') as string
-  const amountRaw = formData.get('amount_usd') as string
-  const referenceNumber = (formData.get('reference_number') as string)?.trim() || null
-  const status = formData.get('status') as string
-  const billingConceptId = formData.get('billing_concept_id') as string
-
-  if (!studentId || !paymentMethod || !amountRaw || !status || !billingConceptId) {
-    return { error: 'Todos los campos obligatorios deben ser completados.' }
+  if (!isAdminRole(profile.role)) {
+    return { error: 'No tienes permisos suficientes para registrar pagos.' }
   }
 
-  const amountUsd = parseFloat(amountRaw)
-  if (isNaN(amountUsd) || amountUsd <= 0) {
-    return { error: 'El monto debe ser un número válido mayor a cero.' }
-  }
-
-  const validMethods = ['pago_movil', 'zelle', 'efectivo', 'transferencia']
-  if (!validMethods.includes(paymentMethod)) {
-    return { error: 'Método de pago no válido.' }
-  }
-
-  const validStatuses = ['pendiente', 'confirmado']
-  if (!validStatuses.includes(status)) {
-    return { error: 'Estado inicial no válido.' }
-  }
+  const {
+    student_id,
+    billing_concept_id,
+    payment_method,
+    amount_usd,
+    reference_number,
+    status,
+  } = validation.data
 
   // 4. Insertar el registro en la tabla payments
-  const { error: insertError } = await supabase
-    .from('payments')
-    .insert({
-      school_id: profile.school_id,
-      student_id: studentId,
-      payer_id: user.id,
-      payment_method: paymentMethod,
-      amount_usd: amountUsd,
-      reference_number: referenceNumber,
-      status: status,
-      billing_concept_id: billingConceptId,
-      transaction_date: new Date().toISOString().split('T')[0],
-    })
+  const { error: insertError } = await supabase.from('payments').insert({
+    school_id: profile.school_id,
+    student_id,
+    payer_id: user.id,
+    payment_method,
+    amount_usd,
+    reference_number,
+    status,
+    billing_concept_id,
+    transaction_date: new Date().toISOString().split('T')[0],
+  })
 
   if (insertError) {
     console.error('Error al registrar pago:', insertError)
@@ -267,3 +300,99 @@ export async function createPaymentAction(
   revalidatePath('/admin/payments')
   redirect('/admin/payments')
 }
+
+/**
+ * Sincroniza la tasa oficial del BCV llamando al endpoint protegido /api/bcv-sync.
+ * Lee el CRON_SECRET de las variables de entorno en el servidor de forma segura,
+ * garantizando que nunca se exponga al cliente.
+ * Requiere rol administrativo ('admin' o 'coordinador').
+ */
+export async function triggerBcvSyncAction(): Promise<{
+  success?: boolean
+  error?: string
+  rate?: number
+  date?: string
+}> {
+  const supabase = await createClient()
+
+  // 1. Validar autenticación
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: 'No autorizado. Debes iniciar sesión.' }
+  }
+
+  // 2. Validar rol administrativo
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role, school_id')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile || !isAdminRole(profile.role) || !profile.school_id) {
+    return { error: 'No tienes permisos suficientes para actualizar la tasa oficial.' }
+  }
+
+  const cronSecret = process.env.CRON_SECRET?.trim()
+  if (!cronSecret) {
+    return { error: 'CRON_SECRET no está configurado en el servidor.' }
+  }
+
+  // 3. Determinar la URL del endpoint
+  const host =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+
+  try {
+    let res: Response | null = null
+    try {
+      res = await fetch(`${host}/api/bcv-sync`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${cronSecret}`,
+        },
+        cache: 'no-store',
+      })
+    } catch {
+      // Si la llamada HTTP local falla (por ejemplo en dev local sin host resoluble),
+      // invocamos el handler directamente como respaldo
+      const { POST: syncHandler } = await import('@/app/api/bcv-sync/route')
+      const { NextRequest } = await import('next/server')
+      const fakeReq = new NextRequest(`${host}/api/bcv-sync`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${cronSecret}`,
+        },
+      })
+      res = await syncHandler(fakeReq)
+    }
+
+    if (!res) {
+      return { error: 'No se pudo conectar con el servicio de sincronización.' }
+    }
+
+    const data = await res.json()
+
+    if (!res.ok) {
+      return { error: data.error || `Error ${res.status} al sincronizar con el BCV` }
+    }
+
+    // 4. Revalidar vistas dependientes
+    revalidatePath('/admin/payments')
+    revalidatePath('/admin')
+    revalidatePath('/admin/morosidad')
+    revalidatePath('/representante')
+
+    return {
+      success: true,
+      rate: data.rate,
+      date: data.date,
+    }
+  } catch (err: any /* TODO: tipado pendiente */) {
+    console.error('Error al invocar /api/bcv-sync desde Server Action:', err)
+    return { error: err.message || 'Fallo de conexión al sincronizar la tasa del BCV.' }
+  }
+}
+

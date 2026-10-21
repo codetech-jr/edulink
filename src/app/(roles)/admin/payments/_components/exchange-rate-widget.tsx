@@ -28,7 +28,7 @@ export function ExchangeRateWidget({ currentRate }: ExchangeRateWidgetProps) {
       try {
         await updateExchangeRateAction(parsedRate)
         setIsEditing(false)
-      } catch (err: any) {
+      } catch (err: any /* TODO: tipado pendiente */) {
         setError(err.message || 'Error al actualizar la tasa')
       }
     })

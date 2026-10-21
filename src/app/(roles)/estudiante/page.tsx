@@ -91,73 +91,96 @@ export default async function EstudiantePortalPage() {
     )
   }
 
-  // 5. Obtener los datos de la escuela / colegio
-  const { data: school } = await supabase
-    .from('schools')
-    .select('name, rif')
-    .eq('id', student.school_id)
-    .single()
-
-  const defaultSchool = school || { name: 'U.E. Liceo Matalinda', rif: 'J-12345678-9' }
-
-  // 6. Obtener el año escolar activo y los lapsos (terms) correspondientes
-  const { data: schoolYear } = await supabase
-    .from('school_years')
-    .select('id')
-    .eq('school_id', student.school_id)
-    .eq('is_active', true)
-    .single()
-
-  let terms: any[] = []
-  if (schoolYear) {
-    const { data: termsData } = await supabase
-      .from('terms')
-      .select('id, name, term_number')
-      .eq('school_year_id', schoolYear.id)
-      .order('term_number', { ascending: true })
-    terms = termsData || []
-  }
-
-  // 7. Cargar materias (subjects) programadas para la sección/curso del estudiante
-  const { data: subjects } = await supabase
-    .from('subjects')
-    .select(`
-      id,
-      name,
-      start_time,
-      end_time,
-      weekly_hours,
-      profiles:teacher_id (
-        full_name
-      )
-    `)
-    .eq('course_id', student.course_id)
-
-  const activeSubjects = subjects || []
-
-  // 8. Cargar evaluaciones vinculadas a estas materias
-  const subjectIds = activeSubjects.map((s) => s.id)
-  let evaluations: any[] = []
-  
-  if (subjectIds.length > 0) {
-    const { data: evData } = await supabase
-      .from('evaluations')
+  // ── Parallel Stage 1: Datos independientes del estudiante ───
+  const [
+    { data: school },
+    { data: schoolYear },
+    { data: subjects },
+    { data: attendanceData },
+    { data: communicationsData },
+  ] = await Promise.all([
+    supabase
+      .from('schools')
+      .select('name, rif')
+      .eq('id', student.school_id)
+      .single(),
+    supabase
+      .from('school_years')
+      .select('id')
+      .eq('school_id', student.school_id)
+      .eq('is_active', true)
+      .single(),
+    supabase
+      .from('subjects')
       .select(`
         id,
-        subject_id,
         name,
-        weight,
-        evaluation_date,
-        term_id,
-        is_published
+        start_time,
+        end_time,
+        weekly_hours,
+        profiles:teacher_id (
+          full_name
+        )
       `)
-      .in('subject_id', subjectIds)
-      .order('created_at', { ascending: true })
-    evaluations = evData || []
-  }
+      .eq('course_id', student.course_id),
+    supabase
+      .from('attendance')
+      .select(`
+        id,
+        status,
+        attendance_date,
+        subject_id
+      `)
+      .eq('student_id', student.id)
+      .gte('attendance_date', '2026-06-08')
+      .lte('attendance_date', '2026-06-12'),
+    supabase
+      .from('communications')
+      .select('*')
+      .eq('school_id', student.school_id)
+      .order('created_at', { ascending: false }),
+  ])
 
-  // 9. Cargar calificaciones cargadas para el estudiante
-  let grades: any[] = []
+  const defaultSchool = school || { name: 'U.E. Liceo Matalinda', rif: 'J-12345678-9' }
+  const activeSubjects = subjects || []
+  const attendance = attendanceData || []
+  const communications = (communicationsData ?? []).filter((c: any) => !c.is_archived) /* TODO: tipado pendiente */
+
+  // ── Parallel Stage 2: Lapsos y Evaluaciones ─────────────────
+  const subjectIds = activeSubjects.map((s) => s.id)
+
+  const [termsData, evData] = await Promise.all([
+    schoolYear
+      ? supabase
+          .from('terms')
+          .select('id, name, term_number')
+          .eq('school_year_id', schoolYear.id)
+          .order('term_number', { ascending: true })
+          .then((res) => res.data)
+      : Promise.resolve(null),
+    subjectIds.length > 0
+      ? supabase
+          .from('evaluations')
+          .select(`
+            id,
+            subject_id,
+            name,
+            weight,
+            evaluation_date,
+            term_id,
+            is_published
+          `)
+          .in('subject_id', subjectIds)
+          .order('created_at', { ascending: true })
+          .then((res) => res.data)
+      : Promise.resolve(null),
+  ])
+
+  const terms = termsData || []
+  const evaluations = evData || []
+
+  // ── Parallel Stage 3: Calificaciones ────────────────────────
+  let grades: any[] = [] /* TODO: tipado pendiente */
   const evaluationIds = evaluations.map((e) => e.id)
 
   if (evaluationIds.length > 0) {
@@ -174,30 +197,6 @@ export default async function EstudiantePortalPage() {
       .in('evaluation_id', evaluationIds)
     grades = gradesData || []
   }
-
-  // 10. Cargar asistencia del estudiante para la semana actual
-  const { data: attendanceData } = await supabase
-    .from('attendance')
-    .select(`
-      id,
-      status,
-      attendance_date,
-      subject_id
-    `)
-    .eq('student_id', student.id)
-    .gte('attendance_date', '2026-06-08')
-    .lte('attendance_date', '2026-06-12')
-
-  const attendance = attendanceData || []
-
-  // 11. Obtener comunicados oficiales de la institución
-  const { data: communicationsData } = await supabase
-    .from('communications')
-    .select('*')
-    .eq('school_id', student.school_id)
-    .order('created_at', { ascending: false })
-
-  const communications = communicationsData ?? []
 
   return (
     <StudentDashboard

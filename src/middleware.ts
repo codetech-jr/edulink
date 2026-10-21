@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { ROLE_DASHBOARD_MAP } from '@/lib/permissions'
 
 // Rutas protegidas por rol
 const PROTECTED_PREFIXES = ['/admin', '/docente', '/representante', '/estudiante']
@@ -67,14 +68,7 @@ export async function middleware(request: NextRequest) {
       .single()
 
     if (profile?.role) {
-      const dashboardMap: Record<string, string> = {
-        admin: '/admin',
-        docente: '/docente',
-        representante: '/representante',
-        estudiante: '/estudiante',
-      }
-
-      const destination = dashboardMap[profile.role]
+      const destination = ROLE_DASHBOARD_MAP[profile.role as keyof typeof ROLE_DASHBOARD_MAP]
 
       if (destination) {
         const url = request.nextUrl.clone()

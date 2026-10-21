@@ -76,7 +76,7 @@ export default async function CoursesManagementPage() {
 
         {hasCourses ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {courseList.map((course: any) => (
+            {courseList.map((course: any /* TODO: tipado pendiente */) => (
               <div key={course.id} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow group relative">
                 <div className="flex items-start justify-between mb-4">
                   <div className="bg-blue-50 p-3 rounded-xl group-hover:bg-blue-600 transition-colors">

@@ -58,7 +58,7 @@ export function StudentForm({ courses, initialData }: StudentFormProps) {
       } else {
         await createStudent(formData)
       }
-    } catch (e: any) {
+    } catch (e: any /* TODO: tipado pendiente */) {
       setError(e.message || 'Ocurrió un error inesperado')
     }
   }

@@ -41,11 +41,12 @@ function getTypeConfig(type: 'urgente' | 'informativo' | 'recordatorio') {
 }
 
 interface CommunicationsTabProps {
-  schoolName: string
+  schoolName?: string
+  // TODO: tipado pendiente
   communications: any[]
 }
 
-export function CommunicationsTab({ schoolName, communications }: CommunicationsTabProps) {
+export function CommunicationsTab({ schoolName = 'Colegio', communications }: CommunicationsTabProps) {
   return (
     <div className="space-y-4">
 

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
+import { ROLE_DASHBOARD_MAP } from '@/lib/permissions'
 
 export type AuthState = {
   error: string | null
@@ -52,25 +53,12 @@ export async function loginAction(prevState: AuthState, formData: FormData): Pro
     return { error: 'Tu cuenta existe, pero no pudimos verificar tu rol. Contacta al administrador.' }
   }
 
-  // 3. Condicional para redirigir basado en el rol obtenido
+  // 3. Redirigir al dashboard según el rol usando el mapa centralizado
   const role = profile.role
-  let redirectPath = ''
+  const redirectPath = ROLE_DASHBOARD_MAP[role as keyof typeof ROLE_DASHBOARD_MAP]
 
-  switch (role) {
-    case 'admin':
-      redirectPath = '/admin'
-      break
-    case 'docente':
-      redirectPath = '/docente'
-      break
-    case 'representante':
-      redirectPath = '/representante'
-      break
-    case 'estudiante':
-      redirectPath = '/estudiante'
-      break
-    default:
-      return { error: 'El rol asignado no es válido o no tiene una vista asignada.' }
+  if (!redirectPath) {
+    return { error: 'El rol asignado no es válido o no tiene una vista asignada.' }
   }
 
   // CRÍTICO: revalidar antes de redirigir para que Next.js propague las cookies

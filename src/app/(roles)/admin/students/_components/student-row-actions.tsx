@@ -20,7 +20,7 @@ export function StudentRowActions({ studentId, studentName }: StudentRowActionsP
     try {
       await deleteStudent(studentId)
       setShowConfirm(false)
-    } catch (error: any) {
+    } catch (error: any /* TODO: tipado pendiente */) {
       alert(error.message || 'Error al eliminar el estudiante')
     } finally {
       setIsDeleting(false)

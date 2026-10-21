@@ -2,6 +2,7 @@
 
 import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { ReportPaymentSchema } from '@/lib/schemas/payment.schema'
 
 export interface ReportPaymentState {
   error: string | null
@@ -16,16 +17,27 @@ export async function reportPaymentAction(
   prevState: ReportPaymentState,
   formData: FormData
 ): Promise<ReportPaymentState> {
+  // 1. Validar campos con Zod
+  const rawData = Object.fromEntries(formData.entries())
+  const validation = ReportPaymentSchema.safeParse(rawData)
+
+  if (!validation.success) {
+    return { error: validation.error.issues[0].message, success: false }
+  }
+
   try {
     const supabase = await createClient()
 
-    // 1. Verificar sesión de usuario
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    // 2. Verificar sesión de usuario
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
     if (authError || !user) {
       return { error: 'No autorizado. Por favor, inicia sesión nuevamente.', success: false }
     }
 
-    // 2. Verificar rol 'representante' del usuario autenticado
+    // 3. Verificar rol 'representante' del usuario autenticado
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('role')
@@ -36,32 +48,19 @@ export async function reportPaymentAction(
       return { error: 'Acción no permitida. Solo los representantes pueden reportar pagos.', success: false }
     }
 
-    // 3. Extraer y validar campos del formulario
-    const studentId = formData.get('student_id') as string
-    const billingConceptId = formData.get('billing_concept_id') as string
-    const paymentMethod = formData.get('payment_method') as string
-    const amountRaw = formData.get('amount_usd') as string
-    const referenceNumber = (formData.get('reference_number') as string)?.trim()
-
-    if (!studentId || !billingConceptId || !paymentMethod || !amountRaw || !referenceNumber) {
-      return { error: 'Todos los campos obligatorios deben ser completados.', success: false }
-    }
-
-    const amountUsd = parseFloat(amountRaw)
-    if (isNaN(amountUsd) || amountUsd <= 0) {
-      return { error: 'El monto debe ser un número válido mayor a cero.', success: false }
-    }
-
-    const validMethods = ['pago_movil', 'zelle', 'efectivo', 'transferencia']
-    if (!validMethods.includes(paymentMethod)) {
-      return { error: 'Método de pago no válido.', success: false }
-    }
+    const {
+      student_id,
+      billing_concept_id,
+      payment_method,
+      amount_usd,
+      reference_number,
+    } = validation.data
 
     // 4. Validar relación representante-estudiante y obtener el school_id del estudiante
     const { data: student, error: studentError } = await supabase
       .from('students')
       .select('school_id, parent_id')
-      .eq('id', studentId)
+      .eq('id', student_id)
       .single()
 
     if (studentError || !student) {
@@ -76,7 +75,7 @@ export async function reportPaymentAction(
     const { data: concept, error: conceptError } = await supabase
       .from('billing_concepts')
       .select('id, school_id, is_active')
-      .eq('id', billingConceptId)
+      .eq('id', billing_concept_id)
       .single()
 
     if (conceptError || !concept || !concept.is_active) {
@@ -87,20 +86,18 @@ export async function reportPaymentAction(
       return { error: 'El concepto de facturación no coincide con la institución del estudiante.', success: false }
     }
 
-    // 6. Insertar el pago en estado pendiente
-    const { error: insertError } = await supabase
-      .from('payments')
-      .insert({
-        school_id: student.school_id,
-        student_id: studentId,
-        billing_concept_id: billingConceptId,
-        payer_id: user.id,
-        payment_method: paymentMethod,
-        amount_usd: amountUsd,
-        reference_number: referenceNumber,
-        status: 'pendiente',
-        transaction_date: new Date().toISOString().split('T')[0],
-      })
+    // 6. Insertar el pago en estado pendiente usando el school_id del estudiante verificado
+    const { error: insertError } = await supabase.from('payments').insert({
+      school_id: student.school_id,
+      student_id,
+      billing_concept_id,
+      payer_id: user.id,
+      payment_method,
+      amount_usd,
+      reference_number,
+      status: 'pendiente',
+      transaction_date: new Date().toISOString().split('T')[0],
+    })
 
     if (insertError) {
       console.error('Error insertando pago reportado:', insertError)
@@ -112,7 +109,7 @@ export async function reportPaymentAction(
     revalidatePath('/admin/payments')
 
     return { error: null, success: true }
-  } catch (err: any) {
+  } catch (err: any /* TODO: tipado pendiente */) {
     console.error('Error no controlado en reportPaymentAction:', err)
     return { error: 'Ocurrió un error inesperado al procesar la solicitud.', success: false }
   }

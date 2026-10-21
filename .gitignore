@@ -37,3 +37,16 @@ next-env.d.ts
 # scratch & temp
 scratch/
 .vscode/
+
+# next-pwa generated service workers
+public/sw.js
+public/sw.js.map
+public/workbox-*.js
+public/workbox-*.js.map
+public/fallback-*.js
+public/fallback-*.js.map
+public/swe-worker-*.js
+public/swe-worker-*.js.map
+
+# agent folder
+.agent/

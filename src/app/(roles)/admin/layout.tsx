@@ -1,6 +1,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import { AdminSidebar } from './_components/AdminSidebar'
+import { isAdminRole, ROLE_LABELS, type AppRole } from '@/lib/permissions'
 
 export const metadata = {
   title: 'Panel Administrativo | EduLink',
@@ -30,16 +31,22 @@ export default async function AdminLayout({
     .eq('id', user.id)
     .single()
 
-  if (!profile || profile.role !== 'admin') {
+  // Solo admin y coordinador pueden acceder al panel
+  if (!profile || !isAdminRole(profile.role)) {
     redirect('/login')
   }
 
   const displayName = profile.full_name ?? 'Administrador'
+  const roleLabel = ROLE_LABELS[profile.role as AppRole] ?? 'Administrador'
 
   return (
     <div className="min-h-screen bg-zinc-50">
       {/* Sidebar (fixed on desktop, overlay on mobile) */}
-      <AdminSidebar displayName={displayName} />
+      <AdminSidebar
+        displayName={displayName}
+        roleLabel={roleLabel}
+        role={profile.role as AppRole}
+      />
 
       {/* Main content area — offset by sidebar width on desktop */}
       <main className="md:pl-64">

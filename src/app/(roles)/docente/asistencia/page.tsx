@@ -57,7 +57,7 @@ export default async function DocenteAsistenciaPage() {
   }
 
   // Normalize data for safe client-side typing
-  const normalizedSubjects = (subjects || []).map((sub: any) => {
+  const normalizedSubjects = (subjects || []).map((sub: any /* TODO: tipado pendiente */) => {
     let courseData = sub.courses
     if (Array.isArray(courseData)) {
       courseData = courseData[0] || null

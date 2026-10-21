@@ -93,10 +93,10 @@ export function PrintPlanButton({
           <table className="w-full border-collapse border border-black text-[11px]">
             <thead>
               <tr className="bg-slate-100 font-bold text-center">
-                <th className="border border-black px-3 py-2 text-left w-12">Nº</th>
-                <th className="border border-black px-3 py-2 text-left">Descripción de la Actividad / Evaluación</th>
-                <th className="border border-black px-3 py-2 w-24">Ponderación</th>
-                <th className="border border-black px-3 py-2 w-32">Fecha Estimada</th>
+                <th scope="col" className="border border-black px-3 py-2 text-left w-12">Nº</th>
+                <th scope="col" className="border border-black px-3 py-2 text-left">Descripción de la Actividad / Evaluación</th>
+                <th scope="col" className="border border-black px-3 py-2 w-24">Ponderación</th>
+                <th scope="col" className="border border-black px-3 py-2 w-32">Fecha Estimada</th>
               </tr>
             </thead>
             <tbody>

@@ -15,10 +15,10 @@ import {
 
 interface PaymentInstructionsProps {
   schoolName: string
-  schoolRif: string
+  schoolRif?: string
 }
 
-export function PaymentInstructions({ schoolName, schoolRif }: PaymentInstructionsProps) {
+export function PaymentInstructions({ schoolName, schoolRif = 'J-00000000-0' }: PaymentInstructionsProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [copiedField, setCopiedField] = useState<string | null>(null)
 
@@ -44,6 +44,7 @@ export function PaymentInstructions({ schoolName, schoolRif }: PaymentInstructio
       {/* Header Colapsable */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
+        aria-expanded={isExpanded}
         className="w-full p-5 flex items-center justify-between hover:bg-zinc-50/50 transition-colors text-left"
       >
         <div className="flex items-center gap-3">
@@ -89,6 +90,7 @@ export function PaymentInstructions({ schoolName, schoolRif }: PaymentInstructio
                     onClick={() => copyToClipboard(pagoMovilData.telefono, 'telefono')}
                     className="p-1 text-zinc-400 hover:text-indigo-600 hover:bg-zinc-100 rounded-md transition-all active:scale-95 cursor-pointer"
                     title="Copiar teléfono"
+                    aria-label="Copiar teléfono de Pago Móvil"
                   >
                     {copiedField === 'telefono' ? (
                       <Check className="w-3 h-3 text-emerald-600" />
@@ -107,6 +109,7 @@ export function PaymentInstructions({ schoolName, schoolRif }: PaymentInstructio
                     onClick={() => copyToClipboard(pagoMovilData.rif, 'rif')}
                     className="p-1 text-zinc-400 hover:text-indigo-600 hover:bg-zinc-100 rounded-md transition-all active:scale-95 cursor-pointer"
                     title="Copiar RIF"
+                    aria-label="Copiar RIF del colegio"
                   >
                     {copiedField === 'rif' ? (
                       <Check className="w-3 h-3 text-emerald-600" />
@@ -137,6 +140,7 @@ export function PaymentInstructions({ schoolName, schoolRif }: PaymentInstructio
                     onClick={() => copyToClipboard(zelleData.correo, 'correo')}
                     className="p-1 text-zinc-400 hover:text-indigo-600 hover:bg-zinc-100 rounded-md transition-all active:scale-95 cursor-pointer"
                     title="Copiar correo"
+                    aria-label="Copiar correo de Zelle"
                   >
                     {copiedField === 'correo' ? (
                       <Check className="w-3 h-3 text-emerald-600" />
