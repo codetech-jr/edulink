@@ -20,7 +20,10 @@ const withPWA = withPWAInit({
 const nextConfig = {
   reactStrictMode: true,
   experimental: {
-    serverComponentsExternalPackages: ['@react-pdf/renderer'],
+    serverComponentsExternalPackages: ['@react-pdf/renderer', 'pdfkit'],
+    outputFileTracingIncludes: {
+      '/api/**/*': ['./node_modules/pdfkit/**/*'],
+    },
   },
   images: {
     remotePatterns: [

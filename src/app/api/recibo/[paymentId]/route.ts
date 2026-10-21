@@ -94,8 +94,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       status,
       reference_number,
       transaction_date,
-      receipt_number,
-      processed_at,
       billing_concept_id
     `
 
@@ -117,6 +115,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
         if (adminRes.data) {
           payment = adminRes.data
+        } else if (adminRes.error) {
+          paymentError = adminRes.error
         }
       } catch (err) {
         console.warn('[Recibo API] Fallback adminClient para pago falló:', err)
@@ -314,7 +314,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       : new Date().getFullYear()
 
     const receiptNumber =
-      payment.receipt_number ||
+      (payment as any).receipt_number ||
       `REC-${transactionYear}-${String(payment.id).slice(0, 5).toUpperCase()}`
 
     const methodFormatted =
