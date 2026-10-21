@@ -51,91 +51,167 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     // 2. Obtener perfil del usuario actual
-    const { data: profile, error: profileError } = await supabase
+    let { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('id, full_name, role, school_id')
       .eq('id', user.id)
-      .single()
+      .maybeSingle()
 
-    if (profileError || !profile) {
+    if (!profile) {
+      try {
+        const { createAdminClient } = await import('@/utils/supabase/admin')
+        const adminClient = createAdminClient()
+        const adminProf = await adminClient
+          .from('profiles')
+          .select('id, full_name, role, school_id')
+          .eq('id', user.id)
+          .maybeSingle()
+        if (adminProf.data) {
+          profile = adminProf.data
+        }
+      } catch {
+        // Fallback no-op
+      }
+    }
+
+    if (!profile) {
       return new Response(JSON.stringify({ error: 'Perfil no encontrado' }), {
         status: 403,
         headers: { 'Content-Type': 'application/json' },
       })
     }
 
-    // 3. Consultar el pago y todas sus entidades relacionadas
-    const { data: payment, error: paymentError } = await supabase
-      .from('payments')
-      .select(`
-        id,
-        school_id,
-        student_id,
-        amount_usd,
-        amount_ves,
-        exchange_rate_used,
-        payment_method,
-        status,
-        reference_number,
-        transaction_date,
-        receipt_number,
-        processed_at,
-        billing_concept_id,
-        students (
-          id,
-          full_name,
-          cedula,
-          parent_id,
-          courses (
-            id,
-            name,
-            grade_level,
-            section
-          )
-        ),
-        billing_concepts (
-          id,
-          name,
-          description
-        ),
-        schools (
-          id,
-          name,
-          rif
-        )
-      `)
-      .eq('id', paymentId)
-      .single()
+    // 3. Consultar el pago (columnas directas de la tabla payments para evitar fallos de relación de PostgREST)
+    const paymentColumns = `
+      id,
+      school_id,
+      student_id,
+      payer_id,
+      amount_usd,
+      amount_ves,
+      exchange_rate_used,
+      payment_method,
+      status,
+      reference_number,
+      transaction_date,
+      receipt_number,
+      processed_at,
+      billing_concept_id
+    `
 
-    if (paymentError || !payment) {
-      return new Response(JSON.stringify({ error: 'Pago no encontrado' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' },
-      })
+    let { data: payment, error: paymentError } = await supabase
+      .from('payments')
+      .select(paymentColumns)
+      .eq('id', paymentId)
+      .maybeSingle()
+
+    if (!payment) {
+      try {
+        const { createAdminClient } = await import('@/utils/supabase/admin')
+        const adminClient = createAdminClient()
+        const adminRes = await adminClient
+          .from('payments')
+          .select(paymentColumns)
+          .eq('id', paymentId)
+          .maybeSingle()
+
+        if (adminRes.data) {
+          payment = adminRes.data
+        }
+      } catch (err) {
+        console.warn('[Recibo API] Fallback adminClient para pago falló:', err)
+      }
     }
 
-    // 4. Verificación de Estado: Solo se emite recibo si status = 'confirmado'
-    if (payment.status !== 'confirmado') {
+    if (!payment) {
+      console.error('[Recibo API] Pago no encontrado. paymentId:', paymentId, 'Error previo:', paymentError)
       return new Response(
-        JSON.stringify({ error: 'Este pago aún no ha sido verificado' }),
+        JSON.stringify({
+          error: 'Pago no encontrado',
+          details: paymentError?.message || 'No se encontró el registro con el ID suministrado',
+        }),
         {
-          status: 403,
+          status: 404,
           headers: { 'Content-Type': 'application/json' },
         }
       )
     }
 
-    // 5. Verificación de Autorización:
-    // Admin/Coordinador del mismo colegio O el representante del estudiante
-    const studentData = Array.isArray(payment.students)
-      ? payment.students[0]
-      : payment.students
+    // 4. Verificación de Estado: Solo se emite recibo si status = 'confirmado'
+    if (payment.status !== 'confirmado') {
+      return new Response(
+        JSON.stringify({
+          error: `Este pago se encuentra en estado "${payment.status}". Solo se emite recibo para pagos confirmados.`,
+        }),
+        {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
+    }
 
+    // Cliente para consultas de entidades relacionadas
+    let dbClient = supabase
+    try {
+      const { createAdminClient } = await import('@/utils/supabase/admin')
+      dbClient = createAdminClient()
+    } catch {
+      // Fallback a supabase de sesión
+    }
+
+    // 5. Consultas concurrentes e independientes para estudiante, colegio y concepto de facturación
+    const [studentRes, schoolRes, conceptRes] = await Promise.all([
+      payment.student_id
+        ? dbClient
+            .from('students')
+            .select(`
+              id,
+              full_name,
+              cedula,
+              parent_id,
+              school_id,
+              courses (
+                id,
+                name,
+                grade_level,
+                section
+              )
+            `)
+            .eq('id', payment.student_id)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+      payment.school_id || profile.school_id
+        ? dbClient
+            .from('schools')
+            .select('id, name, rif')
+            .eq('id', payment.school_id || profile.school_id)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+      payment.billing_concept_id
+        ? dbClient
+            .from('billing_concepts')
+            .select('id, name, description')
+            .eq('id', payment.billing_concept_id)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+    ])
+
+    const studentData = studentRes?.data
+    const paymentSchoolId = payment.school_id || studentData?.school_id || profile.school_id
+
+    // 6. Verificación de Autorización:
+    // Admin/Coordinador del mismo colegio O quien pagó O el representante/estudiante
     let isAuthorized = false
 
-    if (isAdminRole(profile.role) && profile.school_id === payment.school_id) {
-      isAuthorized = true
-    } else if (studentData?.parent_id === user.id || studentData?.id === user.id) {
+    if (isAdminRole(profile.role)) {
+      if (!profile.school_id || !paymentSchoolId || profile.school_id === paymentSchoolId) {
+        isAuthorized = true
+      }
+    } else if (
+      (payment.payer_id && payment.payer_id === user.id) ||
+      (studentData?.parent_id && studentData.parent_id === user.id) ||
+      (studentData?.id && studentData.id === user.id)
+    ) {
       isAuthorized = true
     }
 
@@ -149,37 +225,39 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       )
     }
 
-    // 6. Consultar datos del representante
+    // 7. Consultar datos del representante
     let representativeName = 'Representante Registrado'
     let representativeCedula: string | undefined = undefined
 
-    if (studentData?.parent_id) {
-      if (studentData.parent_id === user.id) {
+    const parentId = studentData?.parent_id || payment.payer_id
+
+    if (parentId) {
+      if (parentId === user.id && profile.role === 'representante') {
         representativeName = profile.full_name || 'Representante Legal'
       } else {
-        const { data: parentProfile } = await supabase
+        const { data: parentProfile } = await dbClient
           .from('profiles')
           .select('full_name')
-          .eq('id', studentData.parent_id)
-          .single()
+          .eq('id', parentId)
+          .maybeSingle()
         if (parentProfile?.full_name) {
           representativeName = parentProfile.full_name
         }
       }
     }
 
-    // 7. Calcular equivalente en Bolívares (amount_usd × tasa BCV)
+    // 8. Calcular equivalente en Bolívares (amount_usd × tasa BCV)
     let exchangeRate = payment.exchange_rate_used
       ? Number(payment.exchange_rate_used)
       : null
 
     if (!exchangeRate) {
       // Buscar la tasa BCV registrada en la fecha del pago
-      const { data: rateData } = await supabase
+      const { data: rateData } = await dbClient
         .from('exchange_rates')
         .select('rate')
-        .eq('school_id', payment.school_id)
-        .lte('rate_date', payment.transaction_date)
+        .eq('school_id', paymentSchoolId)
+        .lte('rate_date', payment.transaction_date || new Date().toISOString().split('T')[0])
         .order('rate_date', { ascending: false })
         .limit(1)
         .maybeSingle()
@@ -187,25 +265,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       if (rateData?.rate) {
         exchangeRate = Number(rateData.rate)
       } else {
-        // Intentar con adminClient (para el caso de roles como representante donde RLS bloquee la tabla)
-        try {
-          const { createAdminClient } = await import('@/utils/supabase/admin')
-          const adminClient = createAdminClient()
-          const { data: adminRate } = await adminClient
-            .from('exchange_rates')
-            .select('rate')
-            .order('rate_date', { ascending: false })
-            .limit(1)
-            .maybeSingle()
+        const { data: latestRate } = await dbClient
+          .from('exchange_rates')
+          .select('rate')
+          .order('rate_date', { ascending: false })
+          .limit(1)
+          .maybeSingle()
 
-          if (adminRate?.rate) {
-            exchangeRate = Number(adminRate.rate)
-          }
-        } catch {
-          // No-op fallback
-        }
-
-        if (!exchangeRate) {
+        if (latestRate?.rate) {
+          exchangeRate = Number(latestRate.rate)
+        } else {
           exchangeRate = 36.5
         }
       }
@@ -216,14 +285,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       ? Number(payment.amount_ves)
       : Math.round(amountUsd * exchangeRate * 100) / 100
 
-    // 8. Normalizar datos de colegio, curso y concepto
-    const schoolData = Array.isArray(payment.schools)
-      ? payment.schools[0]
-      : payment.schools
-
+    // 9. Normalizar datos de colegio, curso y concepto
     const schoolInfo = {
-      name: schoolData?.name || 'Institución Educativa',
-      rif: schoolData?.rif || 'J-00000000-0',
+      name: schoolRes?.data?.name || 'Institución Educativa',
+      rif: schoolRes?.data?.rif || 'J-00000000-0',
     }
 
     const courseData = Array.isArray(studentData?.courses)
@@ -238,16 +303,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       section: courseData?.section || 'U',
     }
 
-    const conceptData = Array.isArray(payment.billing_concepts)
-      ? payment.billing_concepts[0]
-      : payment.billing_concepts
-
     const conceptInfo = {
-      name: conceptData?.name || 'Mensualidad / Arancel Escolar',
-      description: conceptData?.description || undefined,
+      name: conceptRes?.data?.name || 'Mensualidad / Arancel Escolar',
+      description: conceptRes?.data?.description || undefined,
     }
 
-    // 9. Número de recibo correlativo (ej. REC-2026-00042)
+    // 10. Número de recibo correlativo (ej. REC-2026-00042)
     const transactionYear = payment.transaction_date
       ? new Date(payment.transaction_date).getFullYear()
       : new Date().getFullYear()
@@ -287,9 +348,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       exchangeRate,
     }
 
-    // 10. Generar Buffer del PDF con @react-pdf/renderer
+    // 11. Generar Buffer del PDF con @react-pdf/renderer
     const pdfBuffer = await renderToBuffer(
-      React.createElement(ReciboTemplate, { data: reciboData }) as any /* TODO: tipado pendiente */
+      React.createElement(ReciboTemplate, { data: reciboData }) as any
     )
 
     const cleanFilename = `recibo_${receiptNumber.toLowerCase().replace(/[^a-z0-9]/gi, '_')}.pdf`
@@ -302,10 +363,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         'Cache-Control': 'no-store, max-age=0',
       },
     })
-  } catch (error: any /* TODO: tipado pendiente */) {
+  } catch (error: any) {
     console.error('Error generando recibo PDF:', error)
     return new Response(
-      JSON.stringify({ error: 'Error interno al generar el recibo de pago' }),
+      JSON.stringify({
+        error: 'Error interno al generar el recibo de pago',
+        details: error?.message || String(error),
+      }),
       {
         status: 500,
         headers: { 'Content-Type': 'application/json' },

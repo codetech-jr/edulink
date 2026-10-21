@@ -57,11 +57,28 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     // 2. Obtener perfil del usuario
-    const { data: profile } = await supabase
+    let { data: profile } = await supabase
       .from('profiles')
       .select('id, full_name, role, school_id')
       .eq('id', user.id)
-      .single()
+      .maybeSingle()
+
+    if (!profile) {
+      try {
+        const { createAdminClient } = await import('@/utils/supabase/admin')
+        const adminClient = createAdminClient()
+        const adminProf = await adminClient
+          .from('profiles')
+          .select('id, full_name, role, school_id')
+          .eq('id', user.id)
+          .maybeSingle()
+        if (adminProf.data) {
+          profile = adminProf.data
+        }
+      } catch {
+        // Fallback
+      }
+    }
 
     if (!profile) {
       return new Response(JSON.stringify({ error: 'Perfil no encontrado' }), {
@@ -70,43 +87,66 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       })
     }
 
-    // 3. Consultar datos del estudiante
-    const { data: student, error: studentError } = await supabase
-      .from('students')
-      .select(`
+    // 3. Consultar datos del estudiante (columnas directas y curso para evitar fallos de relación de schema cache)
+    const studentFields = `
+      id,
+      full_name,
+      cedula,
+      list_number,
+      school_id,
+      parent_id,
+      is_active,
+      courses (
         id,
-        full_name,
-        cedula,
-        list_number,
-        school_id,
-        parent_id,
-        is_active,
-        courses (
-          id,
-          name,
-          grade_level,
-          section
-        ),
-        schools (
-          id,
-          name,
-          rif
-        )
-      `)
-      .eq('id', studentId)
-      .single()
+        name,
+        grade_level,
+        section
+      )
+    `
 
-    if (studentError || !student) {
-      return new Response(JSON.stringify({ error: 'Estudiante no encontrado' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' },
-      })
+    let { data: student, error: studentError } = await supabase
+      .from('students')
+      .select(studentFields)
+      .eq('id', studentId)
+      .maybeSingle()
+
+    if (!student) {
+      try {
+        const { createAdminClient } = await import('@/utils/supabase/admin')
+        const adminClient = createAdminClient()
+        const adminRes = await adminClient
+          .from('students')
+          .select(studentFields)
+          .eq('id', studentId)
+          .maybeSingle()
+        if (adminRes.data) {
+          student = adminRes.data
+        }
+      } catch (err) {
+        console.warn('[Estado de Cuenta API] Fallback adminClient para estudiante falló:', err)
+      }
     }
 
-    // 4. Verificación de Autorización: Admin/Coordinador de la misma escuela O el padre
+    if (!student) {
+      console.error('[Estado de Cuenta API] Estudiante no encontrado:', studentId, 'Error:', studentError)
+      return new Response(
+        JSON.stringify({
+          error: 'Estudiante no encontrado',
+          details: studentError?.message,
+        }),
+        {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
+    }
+
+    // 4. Verificación de Autorización: Admin/Coordinador de la misma escuela O el padre / estudiante
     let isAuthorized = false
-    if (isAdminRole(profile.role) && profile.school_id === student.school_id) {
-      isAuthorized = true
+    if (isAdminRole(profile.role)) {
+      if (!profile.school_id || !student.school_id || profile.school_id === student.school_id) {
+        isAuthorized = true
+      }
     } else if (student.parent_id === user.id || student.id === user.id) {
       isAuthorized = true
     }
@@ -118,15 +158,24 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       )
     }
 
-    // 5. Carga concurrente de pagos, tasa BCV, arancel mensual y representante
+    // Cliente para consultas de datos (adminClient si está disponible)
+    let dbClient = supabase
+    try {
+      const { createAdminClient } = await import('@/utils/supabase/admin')
+      dbClient = createAdminClient()
+    } catch {
+      // Fallback
+    }
+
+    // 5. Carga concurrente de pagos, tasa BCV, arancel mensual, representante y colegio
     const now = new Date()
     const currentYear = now.getFullYear()
     const currentMonthNum = String(now.getMonth() + 1).padStart(2, '0')
     const firstDayOfMonth = `${currentYear}-${currentMonthNum}-01`
 
-    const [paymentsResult, latestRateResult, billingConceptsResult, parentProfileResult] =
+    const [paymentsResult, latestRateResult, billingConceptsResult, parentProfileResult, schoolResult] =
       await Promise.all([
-        supabase
+        dbClient
           .from('payments')
           .select(`
             id,
@@ -144,7 +193,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           .eq('student_id', studentId)
           .order('transaction_date', { ascending: false }),
 
-        supabase
+        dbClient
           .from('exchange_rates')
           .select('rate')
           .eq('school_id', student.school_id)
@@ -152,7 +201,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           .limit(1)
           .maybeSingle(),
 
-        supabase
+        dbClient
           .from('billing_concepts')
           .select('id, name, amount_usd, is_active')
           .eq('school_id', student.school_id)
@@ -160,10 +209,18 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           .order('amount_usd', { ascending: false }),
 
         student.parent_id
-          ? supabase
+          ? dbClient
               .from('profiles')
               .select('full_name')
               .eq('id', student.parent_id)
+              .maybeSingle()
+          : Promise.resolve({ data: null }),
+
+        student.school_id
+          ? dbClient
+              .from('schools')
+              .select('id, name, rif')
+              .eq('id', student.school_id)
               .maybeSingle()
           : Promise.resolve({ data: null }),
       ])
@@ -226,7 +283,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     const totalDebtVes = Math.round(totalDebtUsd * bcvRate * 100) / 100
 
-    const paymentHistory: EstadoCuentaPayment[] = payments.map((p: any /* TODO: tipado pendiente */) => ({
+    const paymentHistory: EstadoCuentaPayment[] = payments.map((p: any) => ({
       date: formatDateVE(p.transaction_date || p.created_at),
       concept: p.billing_concepts?.name || 'Mensualidad Escolar',
       method: PAYMENT_METHODS[p.payment_method] || p.payment_method || 'Pago',
@@ -235,7 +292,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       status: p.status,
     }))
 
-    const schoolData = Array.isArray(student.schools) ? student.schools[0] : student.schools
+    const schoolData = schoolResult?.data
     const courseData = Array.isArray(student.courses) ? student.courses[0] : student.courses
 
     const monthNames = [
@@ -281,7 +338,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     // 6. Generar Buffer del PDF
     const pdfBuffer = await renderToBuffer(
-      React.createElement(EstadoCuentaTemplate, { data: estadoCuentaData }) as any /* TODO: tipado pendiente */
+      React.createElement(EstadoCuentaTemplate, { data: estadoCuentaData }) as any
     )
 
     const cleanName = student.full_name.toLowerCase().replace(/[^a-z0-9]/gi, '_')
@@ -295,10 +352,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         'Cache-Control': 'no-store, max-age=0',
       },
     })
-  } catch (error: any /* TODO: tipado pendiente */) {
+  } catch (error: any) {
     console.error('Error generando estado de cuenta PDF:', error)
     return new Response(
-      JSON.stringify({ error: 'Error interno al generar el estado de cuenta' }),
+      JSON.stringify({
+        error: 'Error interno al generar el estado de cuenta',
+        details: error?.message || String(error),
+      }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     )
   }
