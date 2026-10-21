@@ -187,16 +187,27 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       if (rateData?.rate) {
         exchangeRate = Number(rateData.rate)
       } else {
-        // Fallback a la tasa más reciente registrada para la escuela
-        const { data: latestRate } = await supabase
-          .from('exchange_rates')
-          .select('rate')
-          .eq('school_id', payment.school_id)
-          .order('rate_date', { ascending: false })
-          .limit(1)
-          .maybeSingle()
+        // Intentar con adminClient (para el caso de roles como representante donde RLS bloquee la tabla)
+        try {
+          const { createAdminClient } = await import('@/utils/supabase/admin')
+          const adminClient = createAdminClient()
+          const { data: adminRate } = await adminClient
+            .from('exchange_rates')
+            .select('rate')
+            .order('rate_date', { ascending: false })
+            .limit(1)
+            .maybeSingle()
 
-        exchangeRate = latestRate?.rate ? Number(latestRate.rate) : 36.5
+          if (adminRate?.rate) {
+            exchangeRate = Number(adminRate.rate)
+          }
+        } catch {
+          // No-op fallback
+        }
+
+        if (!exchangeRate) {
+          exchangeRate = 36.5
+        }
       }
     }
 

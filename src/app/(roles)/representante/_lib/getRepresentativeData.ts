@@ -225,7 +225,51 @@ export async function getRepresentativeData(
 
   const payments = paymentsResult.data ?? []
   const billingConcepts = billingConceptsResult.data ?? []
-  const bcvRate = exchangeRatesResult.data?.rate ? Number(exchangeRatesResult.data.rate) : 36.5
+
+  // Obtener tasa BCV con fallback a adminClient (en caso de que RLS restrinja la lectura a representantes)
+  let bcvRate = exchangeRatesResult.data?.rate ? Number(exchangeRatesResult.data.rate) : null
+
+  if (!bcvRate) {
+    try {
+      const { createAdminClient } = await import('@/utils/supabase/admin')
+      const adminClient = createAdminClient()
+
+      // 1. Intentar por el colegio específico
+      const { data: adminRate } = await adminClient
+        .from('exchange_rates')
+        .select('rate')
+        .eq('school_id', schoolId)
+        .order('rate_date', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (adminRate?.rate) {
+        bcvRate = Number(adminRate.rate)
+      } else {
+        // 2. Intentar la tasa más reciente registrada en el sistema
+        const { data: globalRate } = await adminClient
+          .from('exchange_rates')
+          .select('rate')
+          .order('rate_date', { ascending: false })
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (globalRate?.rate) {
+          bcvRate = Number(globalRate.rate)
+        }
+      }
+    } catch (err) {
+      console.error('[Representante] Error al obtener tasa con adminClient:', err)
+    }
+  }
+
+  // Fallback seguro si la base de datos no tiene ninguna tasa registrada
+  if (!bcvRate) {
+    bcvRate = 36.5
+  }
+
   const school = schoolResult.data || { name: 'Institución Educativa', rif: 'J-00000000-0' }
   const attendance = attendanceResult.data ?? []
   const gradesData = gradesResult.data ?? []

@@ -169,7 +169,27 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       ])
 
     const payments = paymentsResult.data ?? []
-    const bcvRate = latestRateResult.data?.rate ? Number(latestRateResult.data.rate) : 36.5
+    let bcvRate = latestRateResult.data?.rate ? Number(latestRateResult.data.rate) : null
+
+    if (!bcvRate) {
+      try {
+        const { createAdminClient } = await import('@/utils/supabase/admin')
+        const adminClient = createAdminClient()
+        const { data: adminRate } = await adminClient
+          .from('exchange_rates')
+          .select('rate')
+          .order('rate_date', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (adminRate?.rate) {
+          bcvRate = Number(adminRate.rate)
+        }
+      } catch {
+        // No-op
+      }
+      if (!bcvRate) bcvRate = 36.5
+    }
+
     const parentProfile = parentProfileResult.data
 
     // Concepto base mensual
