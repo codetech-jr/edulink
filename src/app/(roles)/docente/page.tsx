@@ -1,7 +1,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ClipboardCheck, BookMarked, ArrowUpRight, Sparkles } from 'lucide-react'
+import { ClipboardCheck, BookMarked, ArrowUpRight, Sparkles, ShieldCheck } from 'lucide-react'
 
 export default async function DocenteDashboardPage() {
   const supabase = await createClient()
@@ -78,7 +78,7 @@ export default async function DocenteDashboardPage() {
           Accesos Directos
         </h3>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Asistencia */}
           <Link href="/docente/asistencia" className="group block">
             <div className="h-full flex flex-col justify-between rounded-2xl border border-zinc-200/80 bg-white p-5 transition-all duration-200 hover:border-zinc-300 hover:shadow-sm">
@@ -123,6 +123,30 @@ export default async function DocenteDashboardPage() {
               <div className="mt-5 pt-3 border-t border-zinc-100 flex items-center justify-between text-[11px] font-medium text-indigo-600 group-hover:text-indigo-700 transition-colors">
                 <span>Ir a Calificaciones</span>
                 <ArrowUpRight className="h-4 w-4 text-indigo-300 group-hover:text-indigo-500 transition-all" />
+              </div>
+            </div>
+          </Link>
+
+          {/* Conducta y Novedades */}
+          <Link href="/docente/conducta" className="group block">
+            <div className="h-full flex flex-col justify-between rounded-2xl border border-zinc-200/80 bg-white p-5 transition-all duration-200 hover:border-zinc-300 hover:shadow-sm">
+              <div>
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 transition-colors duration-200 group-hover:bg-emerald-100 border border-emerald-100/60">
+                  <ShieldCheck
+                    className="h-[18px] w-[18px] text-emerald-600"
+                    strokeWidth={1.8}
+                  />
+                </div>
+                <h4 className="mt-4 text-[14px] font-semibold text-zinc-800 group-hover:text-zinc-900">
+                  Conducta y Novedades
+                </h4>
+                <p className="mt-1.5 text-[12.5px] text-zinc-400 leading-relaxed">
+                  Registra méritos, felicitaciones, observaciones de aula o llamados de atención con firma digital.
+                </p>
+              </div>
+              <div className="mt-5 pt-3 border-t border-zinc-100 flex items-center justify-between text-[11px] font-medium text-emerald-600 group-hover:text-emerald-700 transition-colors">
+                <span>Ir a Conducta</span>
+                <ArrowUpRight className="h-4 w-4 text-emerald-300 group-hover:text-emerald-500 transition-all" />
               </div>
             </div>
           </Link>

@@ -6,12 +6,12 @@ import {
   Clock,
   FileDown,
   BookOpenCheck,
-  ShieldAlert,
   Sparkles,
   Info,
 } from 'lucide-react'
 import { WeeklyAttendanceCard } from './WeeklyAttendanceCard'
 import { GradesAccordion } from './GradesAccordion'
+import { StudentBehaviorCard } from './StudentBehaviorCard'
 
 // Datos simulados de horario semanal
 const mockSchedule = [
@@ -25,12 +25,10 @@ const mockSchedule = [
 interface Student {
   id: string
   full_name: string
-  // TODO: tipado pendiente
   courses: any
-  // TODO: tipado pendiente
   attendance?: any[]
-  // TODO: tipado pendiente
   grades?: any[]
+  behaviorRecords?: any[]
 }
 
 interface AcademicsTabProps {
@@ -157,31 +155,11 @@ export function AcademicsTab({ students }: AcademicsTabProps) {
               </div>
             </div>
 
-            {/* Tarjeta "Conducta y Novedades" */}
-            <div className="bg-white rounded-2xl border border-dashed border-zinc-200/80 shadow-sm overflow-hidden relative">
-              <div className="p-5 flex items-center gap-3.5">
-                <div className="w-10 h-10 bg-zinc-50 border border-zinc-200/60 rounded-xl flex items-center justify-center text-zinc-400 flex-shrink-0">
-                  <ShieldAlert className="w-4.5 h-4.5" />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="text-xs font-semibold text-zinc-800 flex items-center gap-2">
-                    Conducta y Novedades
-                    <span className="inline-flex items-center px-2 py-0.5 text-[9px] font-medium bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-full">
-                      Próxima Versión
-                    </span>
-                  </h3>
-                  <p className="text-[11px] text-zinc-400 mt-0.5">
-                    Registro disciplinario, observaciones del docente y seguimiento conductual.
-                  </p>
-                </div>
-              </div>
-              <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] rounded-2xl flex items-center justify-center pointer-events-none">
-                <span className="px-4 py-2 bg-zinc-950 text-white text-[10px] font-semibold rounded-full tracking-wider uppercase flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-                  En Desarrollo
-                </span>
-              </div>
-            </div>
+            {/* Tarjeta de Conducta y Novedades */}
+            <StudentBehaviorCard
+              studentName={student.full_name}
+              records={student.behaviorRecords || []}
+            />
           </div>
         )
       })}

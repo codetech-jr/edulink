@@ -98,6 +98,7 @@ export async function getRepresentativeData(
     attendanceResult,
     gradesResult,
     communicationsResult,
+    behaviorResult,
   ] = await Promise.all([
     supabase
       .from('payments')
@@ -197,6 +198,29 @@ export async function getRepresentativeData(
       .eq('school_id', schoolId)
       .order('created_at', { ascending: false })
       .limit(10),
+
+    supabase
+      .from('student_behavior_records')
+      .select(`
+        id,
+        student_id,
+        school_id,
+        created_by,
+        type,
+        title,
+        description,
+        incident_date,
+        requires_parent_signature,
+        parent_acknowledged_at,
+        created_at,
+        profiles:created_by (
+          full_name,
+          role
+        )
+      `)
+      .in('student_id', studentIds)
+      .order('incident_date', { ascending: false })
+      .order('created_at', { ascending: false }),
   ])
 
   const payments = paymentsResult.data ?? []
@@ -289,10 +313,13 @@ export async function getRepresentativeData(
     }
   })
 
+  const behaviorRecords = behaviorResult?.data ?? []
+
   const studentsWithAcademicData = rawStudents.map((student) => ({
     ...student,
     attendance: attendance.filter((a) => a.student_id === student.id),
     grades: normalizedGrades.filter((g) => g.student_id === student.id),
+    behaviorRecords: behaviorRecords.filter((b: any) => b.student_id === student.id),
   }))
 
   const totalPagadoGlobal = representedStudents.reduce((sum, s) => sum + s.totalPagado, 0)

@@ -12,6 +12,7 @@ import {
   LogOut,
   Menu,
   X,
+  ShieldCheck,
 } from 'lucide-react'
 
 interface DocenteSidebarProps {
@@ -33,6 +34,11 @@ const NAV_ITEMS = [
     label: 'Calificaciones',
     href: '/docente/calificaciones',
     icon: BookMarked,
+  },
+  {
+    label: 'Conducta y Novedades',
+    href: '/docente/conducta',
+    icon: ShieldCheck,
   },
 ]
 
