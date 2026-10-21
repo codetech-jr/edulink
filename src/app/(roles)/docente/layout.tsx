@@ -1,6 +1,6 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
-import { DocenteSidebar } from './_components/DocenteSidebar'
+import { DocenteShell } from './_components/DocenteShell'
 
 export const metadata = {
   title: 'Panel Docente | EduLink',
@@ -34,36 +34,25 @@ export default async function DocenteLayout({
     redirect('/login')
   }
 
+  // Consultar nombre de la institución escolar
+  let schoolName = ''
+  if (profile.school_id) {
+    const { data: school } = await supabase
+      .from('schools')
+      .select('name')
+      .eq('id', profile.school_id)
+      .maybeSingle()
+
+    if (school?.name) {
+      schoolName = school.name
+    }
+  }
+
   const displayName = profile.full_name ?? 'Profesor'
 
   return (
-    <div className="min-h-screen bg-zinc-50">
-      {/* Sidebar (fixed on desktop, overlay on mobile) */}
-      <DocenteSidebar displayName={displayName} />
-
-      {/* Main content area — offset by sidebar width on desktop */}
-      <main className="md:pl-64">
-        {/* Top bar */}
-        <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-zinc-200/70 bg-white/80 px-6 backdrop-blur-xl md:px-8">
-          {/* Left spacer for mobile menu button */}
-          <div className="w-10 md:w-0" />
-
-          {/* Right: user indicator */}
-          <div className="ml-auto flex items-center gap-3">
-            <span className="hidden text-[13px] text-zinc-400 sm:block">
-              {displayName}
-            </span>
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-50 text-[12px] font-semibold text-indigo-600">
-              {displayName.charAt(0).toUpperCase()}
-            </div>
-          </div>
-        </header>
-
-        {/* Page content */}
-        <div className="p-6 md:p-8">
-          {children}
-        </div>
-      </main>
-    </div>
+    <DocenteShell displayName={displayName} schoolName={schoolName}>
+      {children}
+    </DocenteShell>
   )
 }
