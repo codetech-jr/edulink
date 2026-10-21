@@ -18,6 +18,12 @@ export async function loginAction(prevState: AuthState, formData: FormData): Pro
     return { error: 'El correo y la contraseña son obligatorios.' }
   }
 
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    return {
+      error: 'Faltan variables de entorno de Supabase en el servidor. Configura NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY en Vercel.',
+    }
+  }
+
   const supabase = await createClient()
 
   // 1. Autenticar con Supabase (esto guarda la sesión en las cookies vía setAll)
@@ -27,10 +33,29 @@ export async function loginAction(prevState: AuthState, formData: FormData): Pro
   })
 
   if (authError) {
-    let errorMessage = 'Ocurrió un error inesperado al iniciar sesión.'
-    if (authError.message.includes('Invalid login credentials')) {
+    console.error('[Login Error]:', authError.message, authError)
+    let errorMessage = authError.message || 'Ocurrió un error inesperado al iniciar sesión.'
+
+    if (
+      authError.message.includes('Invalid login credentials') ||
+      authError.message.includes('invalid_credentials')
+    ) {
       errorMessage = 'Credenciales inválidas. Verifica tu correo y contraseña.'
+    } else if (
+      authError.message.includes('fetch failed') ||
+      authError.message.includes('Network') ||
+      authError.message.includes('ENOTFOUND') ||
+      authError.message.includes('Failed to fetch')
+    ) {
+      errorMessage =
+        'No se pudo conectar con la base de datos de Supabase. El proyecto podría estar pausado por inactividad en Supabase o la URL es inaccesible.'
+    } else if (authError.message.includes('Email not confirmed')) {
+      errorMessage =
+        'El correo electrónico no ha sido confirmado. Puedes desactivar "Confirm email" en Supabase Auth o verificar la cuenta.'
+    } else if (authError.message.includes('rate limit')) {
+      errorMessage = 'Límite de intentos superado. Espera unos momentos antes de reintentar.'
     }
+
     return { error: errorMessage }
   }
 
@@ -45,12 +70,14 @@ export async function loginAction(prevState: AuthState, formData: FormData): Pro
       .single()
     profile = result.data
     profileError = result.error
-  } catch (err) {
-    return { error: 'Error de configuración del servidor. Verifica las claves de Supabase.' }
+  } catch (err: any /* TODO: tipado pendiente */) {
+    console.error('[Login Profile Admin Client Error]:', err?.message || err)
+    return { error: 'Error de configuración del servidor. Verifica SUPABASE_SERVICE_ROLE_KEY en Vercel.' }
   }
 
   if (profileError || !profile) {
-    return { error: 'Tu cuenta existe, pero no pudimos verificar tu rol. Contacta al administrador.' }
+    console.error('[Login Profile Error]:', profileError)
+    return { error: 'Tu cuenta existe, pero no pudimos verificar tu rol en la base de datos. Contacta al administrador.' }
   }
 
   // 3. Redirigir al dashboard según el rol usando el mapa centralizado
