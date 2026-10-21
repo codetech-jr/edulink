@@ -19,6 +19,9 @@ const withPWA = withPWAInit({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  experimental: {
+    serverComponentsExternalPackages: ['@react-pdf/renderer'],
+  },
   images: {
     remotePatterns: [
       {

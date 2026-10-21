@@ -5,6 +5,7 @@ import { renderToBuffer } from '@react-pdf/renderer'
 import { BoletinTemplate, BoletinData, SubjectGradeRow } from '@/components/pdf/BoletinTemplate'
 import { isAdminRole } from '@/lib/permissions'
 
+export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 interface RouteParams {
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       .from('profiles')
       .select('id, full_name, role, school_id')
       .eq('id', user.id)
-      .single()
+      .maybeSingle()
 
     if (profileError || !profile) {
       return new Response(JSON.stringify({ error: 'Perfil de usuario no encontrado' }), {
@@ -67,7 +68,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         )
       `)
       .eq('id', studentId)
-      .single()
+      .maybeSingle()
 
     if (studentError || !student) {
       return new Response(JSON.stringify({ error: 'Estudiante no encontrado' }), {
@@ -93,15 +94,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
     // D) Docente de alguna materia del curso del estudiante en el mismo colegio
     else if (profile.role === 'docente' && profile.school_id === student.school_id) {
-      const { data: teacherSubjects } = await supabase
-        .from('subjects')
-        .select('id')
-        .eq('course_id', student.course_id)
-        .eq('teacher_id', user.id)
-        .limit(1)
+      if (student.course_id) {
+        const { data: teacherSubjects } = await supabase
+          .from('subjects')
+          .select('id')
+          .eq('course_id', student.course_id)
+          .eq('teacher_id', user.id)
+          .limit(1)
 
-      if (teacherSubjects && teacherSubjects.length > 0) {
-        isAuthorized = true
+        if (teacherSubjects && teacherSubjects.length > 0) {
+          isAuthorized = true
+        }
       }
     }
 
@@ -114,62 +117,85 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     // 5. Cargar datos institucionales y académicos en paralelo
     const [schoolRes, schoolYearRes, directorRes] = await Promise.all([
-      supabase
-        .from('schools')
-        .select('id, name, rif')
-        .eq('id', student.school_id)
-        .single(),
-      supabase
-        .from('school_years')
-        .select('id, name, is_active')
-        .eq('school_id', student.school_id)
-        .eq('is_active', true)
-        .single(),
-      supabase
-        .from('profiles')
-        .select('full_name')
-        .eq('school_id', student.school_id)
-        .eq('role', 'admin')
-        .limit(1)
-        .single(),
+      student.school_id
+        ? supabase
+            .from('schools')
+            .select('id, name, rif')
+            .eq('id', student.school_id)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+      student.school_id
+        ? supabase
+            .from('school_years')
+            .select('id, name, is_active')
+            .eq('school_id', student.school_id)
+            .eq('is_active', true)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+      student.school_id
+        ? supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('school_id', student.school_id)
+            .eq('role', 'admin')
+            .limit(1)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
     ])
 
-    const school = schoolRes.data || {
+    const school = schoolRes?.data || {
       name: 'Unidad Educativa',
       rif: 'J-00000000-0',
     }
-    const schoolYear = schoolYearRes.data || {
+    const schoolYear = schoolYearRes?.data || {
       id: '',
       name: '2025–2026',
     }
-    const directorName = directorRes.data?.full_name || 'Prof. Dirección General'
+    const directorName = directorRes?.data?.full_name || 'Prof. Dirección General'
 
     // 6. Cargar Lapsos (Terms) del año escolar y Asignaturas del curso
-    const [termsRes, subjectsRes] = await Promise.all([
-      supabase
-        .from('terms')
-        .select('id, name, term_number')
-        .eq('school_id', student.school_id)
-        .order('term_number', { ascending: true }),
-      supabase
-        .from('subjects')
-        .select(`
-          id,
-          name,
-          teacher_id,
-          profiles:teacher_id ( full_name )
-        `)
-        .eq('course_id', student.course_id)
-        .order('name', { ascending: true }),
-    ])
+    const termsPromise = schoolYear.id
+      ? supabase
+          .from('terms')
+          .select('id, name, term_number')
+          .eq('school_year_id', schoolYear.id)
+          .order('term_number', { ascending: true })
+      : supabase
+          .from('terms')
+          .select('id, name, term_number')
+          .order('term_number', { ascending: true })
 
-    const terms = termsRes.data || []
+    const subjectsPromise = student.course_id
+      ? supabase
+          .from('subjects')
+          .select(`
+            id,
+            name,
+            teacher_id,
+            profiles:teacher_id ( full_name )
+          `)
+          .eq('course_id', student.course_id)
+          .order('name', { ascending: true })
+      : Promise.resolve({ data: [], error: null })
+
+    const [termsRes, subjectsRes] = await Promise.all([termsPromise, subjectsPromise])
+
+    let terms = termsRes.data || []
+    if (terms.length === 0) {
+      // Fallback a los 3 lapsos estándar según normativa venezolana
+      terms = [
+        { id: 'term-1', name: '1er Lapso', term_number: 1 },
+        { id: 'term-2', name: '2do Lapso', term_number: 2 },
+        { id: 'term-3', name: '3er Lapso', term_number: 3 },
+      ]
+    }
+
     const subjects = subjectsRes.data || []
-    const subjectIds = subjects.map((s) => s.id)
+    const subjectIds = subjects.map((s: any) => s.id)
 
     // 7. Cargar Evaluaciones y Calificaciones de las asignaturas
-    let evaluations: any[] = [] /* TODO: tipado pendiente */
-    let grades: any[] = [] /* TODO: tipado pendiente */
+    let evaluations: any[] = []
+    let grades: any[] = []
 
     if (subjectIds.length > 0) {
       const { data: evData } = await supabase
@@ -192,17 +218,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     // 8. Determinar los lapsos correspondientes (1, 2, 3)
-    const term1 = terms.find((t) => t.term_number === 1) || terms[0]
-    const term2 = terms.find((t) => t.term_number === 2) || terms[1]
-    const term3 = terms.find((t) => t.term_number === 3) || terms[2]
+    const term1 = terms.find((t: any) => t.term_number === 1) || terms[0]
+    const term2 = terms.find((t: any) => t.term_number === 2) || terms[1]
+    const term3 = terms.find((t: any) => t.term_number === 3) || terms[2]
 
     const selectedFilterTerm = termIdParam
-      ? terms.find((t) => t.id === termIdParam)
+      ? terms.find((t: any) => t.id === termIdParam)
       : null
 
     // 9. Calcular notas por asignatura y por lapso según normativa MPPE
     // Nota de Lapso = Σ(grade.score * evaluation.weight / 100)
-    const subjectRows: SubjectGradeRow[] = subjects.map((sub: any /* TODO: tipado pendiente */) => {
+    const subjectRows: SubjectGradeRow[] = subjects.map((sub: any) => {
       const calculateTermScore = (termId: string | undefined): number | null => {
         if (!termId) return null
         const termEvaluations = evaluations.filter(
@@ -304,18 +330,20 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       minute: '2-digit',
     }).format(new Date())
 
+    const studentFullName = student.full_name || 'Estudiante'
+
     const boletinData: BoletinData = {
       school: {
-        name: school.name,
-        rif: school.rif,
+        name: school?.name || 'Institución Educativa',
+        rif: school?.rif || 'RIF: No registrado',
       },
       student: {
-        fullName: student.full_name,
+        fullName: studentFullName,
         cedula: student.cedula || 'S/C',
         listNumber: student.list_number || 'S/N',
       },
       course: courseInfo,
-      schoolYear: schoolYear.name,
+      schoolYear: schoolYear?.name || '2025–2026',
       termTitle,
       directorName,
       teacherName: profile.role === 'docente' ? profile.full_name : undefined,
@@ -327,11 +355,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     // 11. Generar Buffer del documento PDF con @react-pdf/renderer
     const pdfBuffer = await renderToBuffer(
-      React.createElement(BoletinTemplate, { data: boletinData }) as any /* TODO: tipado pendiente */
+      React.createElement(BoletinTemplate, { data: boletinData }) as any
     )
 
     // Formatear nombre de archivo seguro
-    const sanitizedStudentName = student.full_name
+    const sanitizedStudentName = studentFullName
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .replace(/[^a-zA-Z0-9]/g, '_')
@@ -339,7 +367,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     const filename = `boletin_${sanitizedStudentName}.pdf`
 
-    return new Response(new Uint8Array(pdfBuffer), {
+    return new Response(pdfBuffer as any, {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
@@ -347,10 +375,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         'Cache-Control': 'no-store, max-age=0',
       },
     })
-  } catch (error: any /* TODO: tipado pendiente */) {
-    console.error('Error generando boletín PDF:', error)
+  } catch (error: any) {
+    console.error('Error generando boletín PDF:', error?.stack || error)
     return new Response(
-      JSON.stringify({ error: 'Error interno al generar el boletín escolar en PDF' }),
+      JSON.stringify({
+        error: 'Error interno al generar el boletín escolar en PDF',
+        message: error?.message || 'Fallo inesperado al procesar el documento',
+      }),
       {
         status: 500,
         headers: { 'Content-Type': 'application/json' },

@@ -9,6 +9,9 @@ import {
   type EstadoCuentaPayment,
 } from '@/components/pdf/EstadoCuentaTemplate'
 
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
 interface RouteParams {
   params: Promise<{
     studentId: string

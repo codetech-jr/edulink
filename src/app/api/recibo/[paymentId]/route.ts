@@ -5,6 +5,7 @@ import { renderToBuffer } from '@react-pdf/renderer'
 import { ReciboTemplate, ReciboData } from '@/components/pdf/ReciboTemplate'
 import { isAdminRole } from '@/lib/permissions'
 
+export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 interface RouteParams {
