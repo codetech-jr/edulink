@@ -302,9 +302,7 @@ export async function createPaymentAction(
 }
 
 /**
- * Sincroniza la tasa oficial del BCV llamando al endpoint protegido /api/bcv-sync.
- * Lee el CRON_SECRET de las variables de entorno en el servidor de forma segura,
- * garantizando que nunca se exponga al cliente.
+ * Sincroniza la tasa oficial del BCV ejecutando el servicio de sincronización.
  * Requiere rol administrativo ('admin' o 'coordinador').
  */
 export async function triggerBcvSyncAction(): Promise<{
@@ -335,48 +333,13 @@ export async function triggerBcvSyncAction(): Promise<{
     return { error: 'No tienes permisos suficientes para actualizar la tasa oficial.' }
   }
 
-  const cronSecret = process.env.CRON_SECRET?.trim()
-  if (!cronSecret) {
-    return { error: 'CRON_SECRET no está configurado en el servidor.' }
-  }
-
-  // 3. Determinar la URL del endpoint
-  const host =
-    process.env.NEXT_PUBLIC_APP_URL ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
-
+  // 3. Ejecutar sincronización directamente como administrador verificado
   try {
-    let res: Response | null = null
-    try {
-      res = await fetch(`${host}/api/bcv-sync`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${cronSecret}`,
-        },
-        cache: 'no-store',
-      })
-    } catch {
-      // Si la llamada HTTP local falla (por ejemplo en dev local sin host resoluble),
-      // invocamos el handler directamente como respaldo
-      const { POST: syncHandler } = await import('@/app/api/bcv-sync/route')
-      const { NextRequest } = await import('next/server')
-      const fakeReq = new NextRequest(`${host}/api/bcv-sync`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${cronSecret}`,
-        },
-      })
-      res = await syncHandler(fakeReq)
-    }
+    const { syncBcvRateToAllSchools } = await import('@/lib/services/bcv-sync')
+    const result = await syncBcvRateToAllSchools()
 
-    if (!res) {
-      return { error: 'No se pudo conectar con el servicio de sincronización.' }
-    }
-
-    const data = await res.json()
-
-    if (!res.ok) {
-      return { error: data.error || `Error ${res.status} al sincronizar con el BCV` }
+    if (!result.success) {
+      return { error: result.error || 'Error al sincronizar con el BCV.' }
     }
 
     // 4. Revalidar vistas dependientes
@@ -387,12 +350,12 @@ export async function triggerBcvSyncAction(): Promise<{
 
     return {
       success: true,
-      rate: data.rate,
-      date: data.date,
+      rate: result.rate,
+      date: result.date,
     }
-  } catch (err: any /* TODO: tipado pendiente */) {
-    console.error('Error al invocar /api/bcv-sync desde Server Action:', err)
-    return { error: err.message || 'Fallo de conexión al sincronizar la tasa del BCV.' }
+  } catch (err: any) {
+    console.error('Error al ejecutar sincronización BCV desde Server Action:', err)
+    return { error: err?.message || 'Fallo al sincronizar la tasa del BCV.' }
   }
 }
 
