@@ -264,7 +264,7 @@ export default async function PaymentsPage({ searchParams }: PageProps) {
         <PaymentSearch />
 
         {/* Tabla de Pagos */}
-        <PaymentsTable paymentsList={paymentsList as any} /> /* TODO: tipado pendiente */
+        <PaymentsTable paymentsList={paymentsList as any} />
       </main>
     </div>
   )

@@ -201,7 +201,7 @@ export default async function RepresentanteDashboardPage() {
   )
 
   const academicsTabContent = (
-    <AcademicsTab students={studentsWithAcademicData as any} /> // TODO: tipado pendiente
+    <AcademicsTab students={studentsWithAcademicData as any} />
   )
 
   const communicationsTabContent = (
