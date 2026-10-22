@@ -1,17 +1,35 @@
 'use client'
 
-import { CalendarDays, Clock } from 'lucide-react'
+import { CalendarDays, Clock, Printer } from 'lucide-react'
 import { WEEKDAY_SCHEDULES } from './schedule-utils'
 
-export function StudentScheduleCard() {
+interface StudentScheduleCardProps {
+  onPrintSchedule?: () => void
+}
+
+export function StudentScheduleCard({ onPrintSchedule }: StudentScheduleCardProps) {
   const dayLabels = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']
 
   return (
     <div className="bg-white rounded-2xl border border-zinc-200/80 shadow-sm p-5">
-      <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5 mb-4">
-        <CalendarDays className="w-3.5 h-3.5 text-zinc-300" />
-        Horario de Clases
-      </span>
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
+          <CalendarDays className="w-3.5 h-3.5 text-zinc-300" />
+          Horario de Clases
+        </span>
+
+        {onPrintSchedule && (
+          <button
+            type="button"
+            onClick={onPrintSchedule}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200/80 text-zinc-700 rounded-xl text-[11px] font-semibold transition-all active:scale-[0.98] cursor-pointer"
+            title="Imprimir solo el Horario de Clases"
+          >
+            <Printer className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />
+            <span>Imprimir Horario</span>
+          </button>
+        )}
+      </div>
 
       <div className="space-y-3">
         {Object.keys(WEEKDAY_SCHEDULES).map((key) => {

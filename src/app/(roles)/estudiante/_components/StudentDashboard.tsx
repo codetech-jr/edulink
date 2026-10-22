@@ -1,14 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { logoutAction } from '@/actions/auth-actions'
-import { PrintPlanButton } from '@/components/PrintPlanButton'
 import { LogOut, BookOpen, Megaphone } from 'lucide-react'
 import { StudentAttendanceWeek } from './StudentAttendanceWeek'
 import { StudentScheduleCard } from './StudentScheduleCard'
 import { StudentGradesCard } from './StudentGradesCard'
 import { StudentCommunicationsList } from './StudentCommunicationsList'
 import { StudentProfileCard } from './StudentProfileCard'
+import { PrintScheduleSheet } from './PrintScheduleSheet'
+import { PrintEvaluationsSheet, type SubjectEvaluationGroup } from './PrintEvaluationsSheet'
 
 interface StudentDashboardProps {
   // TODO: tipado pendiente
@@ -42,12 +43,68 @@ export function StudentDashboard({
   communications,
 }: StudentDashboardProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('academico')
-  const [printSubjectId, setPrintSubjectId] = useState<string | null>(null)
+  // Modo de impresión aislado: 'horario' | 'evaluaciones' | nombre_de_asignatura | null
+  const [printMode, setPrintMode] = useState<'horario' | 'evaluaciones' | string | null>('horario')
 
   const course = student.courses
 
+  // Pre-computar grupos de evaluaciones para impresión oficial
+  const currentTerm = terms[0]
+  const currentTermName = currentTerm?.name || 'Primer Lapso'
+  const currentTermId = currentTerm?.id || ''
+
+  const allEvaluationGroups: SubjectEvaluationGroup[] = subjects.map((sub) => {
+    const subEvs = evaluations.filter(
+      (ev) => ev.subject_id === sub.id && (!currentTermId || ev.term_id === currentTermId)
+    )
+    return {
+      subjectName: sub.name,
+      teacherName: sub.profiles?.full_name || 'Docente de la Asignatura',
+      evaluations: subEvs.map((e) => ({
+        id: e.id,
+        name: e.name,
+        weight: Number(e.weight),
+        evaluation_date: e.evaluation_date,
+      })),
+    }
+  })
+
+  // Controladores de impresión aislados
+  const handlePrintSchedule = () => {
+    setPrintMode('horario')
+    setTimeout(() => {
+      window.print()
+    }, 150)
+  }
+
+  const handlePrintAllEvaluations = () => {
+    setPrintMode('evaluaciones')
+    setTimeout(() => {
+      window.print()
+    }, 150)
+  }
+
+  const handlePrintSubject = (subjectName: string | null) => {
+    if (!subjectName) return
+    setPrintMode(subjectName)
+    setTimeout(() => {
+      window.print()
+    }, 150)
+  }
+
+  // Si el usuario presiona Ctrl+P directamente, imprimir horario por defecto
+  useEffect(() => {
+    const handleBeforePrint = () => {
+      if (!printMode) {
+        setPrintMode('horario')
+      }
+    }
+    window.addEventListener('beforeprint', handleBeforePrint)
+    return () => window.removeEventListener('beforeprint', handleBeforePrint)
+  }, [printMode])
+
   // Organizar calificaciones por Lapso y Materia
-  const gradesByTerm: Record<string, Record<string, { grades: any[]; average: number | null; teacherName: string }>> = {} /* TODO: tipado pendiente */
+  const gradesByTerm: Record<string, Record<string, { grades: any[]; average: number | null; teacherName: string }>> = {}
 
   terms.forEach((term) => {
     gradesByTerm[term.name] = {}
@@ -76,16 +133,18 @@ export function StudentDashboard({
 
     const showGrade = ev.is_published
 
-    gradesByTerm[termName][subjectName].grades.push({
-      id: ev.id,
-      name: ev.name,
-      weight: Number(ev.weight),
-      evaluation_date: ev.evaluation_date,
-      score: showGrade ? scoreVal : null,
-      is_absent: showGrade ? !!gradeRecord?.is_absent : false,
-      notes: showGrade ? gradeRecord?.notes : null,
-      is_published: ev.is_published,
-    })
+    if (gradesByTerm[termName]?.[subjectName]) {
+      gradesByTerm[termName][subjectName].grades.push({
+        id: ev.id,
+        name: ev.name,
+        weight: Number(ev.weight),
+        evaluation_date: ev.evaluation_date,
+        score: showGrade ? scoreVal : null,
+        is_absent: showGrade ? !!gradeRecord?.is_absent : false,
+        notes: showGrade ? gradeRecord?.notes : null,
+        is_published: ev.is_published,
+      })
+    }
   })
 
   // Calcular Promedios
@@ -130,9 +189,19 @@ export function StudentDashboard({
   const attendancePercent =
     totalAttendance > 0 ? Math.round((presentsAttendance / totalAttendance) * 100) : 100
 
+  const formattedCourse = course
+    ? `${course.name} (${course.grade_level}° - "${course.section}")`
+    : 'Curso Regular'
+
+  // Determinar grupos de evaluación a imprimir
+  const printableEvaluationGroups =
+    printMode === 'evaluaciones'
+      ? allEvaluationGroups
+      : allEvaluationGroups.filter((g) => g.subjectName === printMode)
+
   return (
     <main className="flex min-h-screen flex-col bg-zinc-50 pb-12 font-sans selection:bg-indigo-100">
-      {/* Navbar Superior Fijo con Blur */}
+      {/* ── Navbar Superior (Oculto en Impresión) ── */}
       <header className="sticky top-0 z-50 w-full border-b border-zinc-200/50 bg-white/80 backdrop-blur-md px-5 py-3.5 flex items-center justify-between print:hidden">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-xs tracking-tight shadow-sm shadow-indigo-200">
@@ -158,11 +227,11 @@ export function StudentDashboard({
         </div>
       </header>
 
-      {/* Contenedor Principal */}
-      <div className="mx-auto w-full max-w-md lg:max-w-7xl lg:px-8 px-4 py-6 space-y-6">
+      {/* ── Contenedor Web Interactivo (Oculto completamente al imprimir con print:hidden) ── */}
+      <div className="mx-auto w-full max-w-md lg:max-w-7xl lg:px-8 px-4 py-6 space-y-6 print:hidden">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           {/* Columna Lateral */}
-          <div className="lg:col-span-4 space-y-6 print:hidden">
+          <div className="lg:col-span-4 space-y-6">
             <StudentProfileCard
               fullName={student.full_name}
               course={course}
@@ -213,7 +282,7 @@ export function StudentDashboard({
           </div>
 
           {/* Columna Principal */}
-          <div className="lg:col-span-8 animate-in fade-in duration-200 print:w-full">
+          <div className="lg:col-span-8 animate-in fade-in duration-200">
             {activeTab === 'academico' ? (
               <div className="space-y-6">
                 <StudentAttendanceWeek
@@ -222,14 +291,15 @@ export function StudentDashboard({
                   attendancePercent={attendancePercent}
                 />
 
-                <StudentScheduleCard />
+                <StudentScheduleCard onPrintSchedule={handlePrintSchedule} />
 
                 <StudentGradesCard
                   gradesByTerm={gradesByTerm}
                   studentName={student.full_name}
                   course={course}
-                  printSubjectId={printSubjectId}
-                  setPrintSubjectId={setPrintSubjectId}
+                  printSubjectId={printMode}
+                  setPrintSubjectId={handlePrintSubject}
+                  onPrintAllEvaluations={handlePrintAllEvaluations}
                 />
               </div>
             ) : (
@@ -242,31 +312,29 @@ export function StudentDashboard({
         </div>
       </div>
 
-      {/* Contenedores de Impresión */}
-      {subjects.map((sub) => {
-        const termName = terms[0]?.name || 'Lapso Escolar'
-        const termId = terms[0]?.id || ''
-        const subEvs = evaluations.filter(
-          (ev) => ev.subject_id === sub.id && ev.term_id === termId
-        )
+      {/* ── Planilla Oficial de Impresión: Horario de Clases ── */}
+      {printMode === 'horario' && (
+        <PrintScheduleSheet
+          schoolName={school.name}
+          schoolRif={school.rif}
+          studentName={student.full_name}
+          studentCedula={student.cedula}
+          courseName={formattedCourse}
+        />
+      )}
 
-        return (
-          <PrintPlanButton
-            key={sub.id}
-            termName={termName}
-            teacherName={sub.profiles?.full_name || 'Docente de la Asignatura'}
-            studentName={student.full_name}
-            subjectName={sub.name}
-            courseName={
-              course
-                ? `${course.name} (${course.grade_level}° - "${course.section}")`
-                : 'Curso'
-            }
-            evaluations={subEvs}
-            allowPrintContainer={printSubjectId === sub.name}
-          />
-        )
-      })}
+      {/* ── Planilla Oficial de Impresión: Actividades Evaluativas (Completo o por Asignatura) ── */}
+      {printMode !== 'horario' && printableEvaluationGroups.length > 0 && (
+        <PrintEvaluationsSheet
+          schoolName={school.name}
+          schoolRif={school.rif}
+          termName={currentTermName}
+          studentName={student.full_name}
+          studentCedula={student.cedula}
+          courseName={formattedCourse}
+          groups={printableEvaluationGroups}
+        />
+      )}
     </main>
   )
 }

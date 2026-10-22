@@ -1,6 +1,6 @@
 'use client'
 
-import { BookOpenCheck } from 'lucide-react'
+import { BookOpenCheck, Printer } from 'lucide-react'
 import { PrintPlanButton } from '@/components/PrintPlanButton'
 
 interface StudentGradesCardProps {
@@ -11,6 +11,7 @@ interface StudentGradesCardProps {
   course: any
   printSubjectId: string | null
   setPrintSubjectId: (id: string | null) => void
+  onPrintAllEvaluations?: () => void
 }
 
 export function StudentGradesCard({
@@ -19,13 +20,28 @@ export function StudentGradesCard({
   course,
   printSubjectId,
   setPrintSubjectId,
+  onPrintAllEvaluations,
 }: StudentGradesCardProps) {
   return (
     <div className="bg-white rounded-2xl border border-zinc-200/80 shadow-sm p-5 space-y-4">
-      <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5 mb-1">
-        <BookOpenCheck className="w-3.5 h-3.5 text-zinc-300" />
-        Libreta de Calificaciones
-      </span>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
+          <BookOpenCheck className="w-3.5 h-3.5 text-zinc-300" />
+          Libreta de Calificaciones y Evaluaciones
+        </span>
+
+        {onPrintAllEvaluations && (
+          <button
+            type="button"
+            onClick={onPrintAllEvaluations}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200/80 text-zinc-700 rounded-xl text-[11px] font-semibold transition-all active:scale-[0.98] cursor-pointer"
+            title="Imprimir solo las Actividades Evaluativas del Lapso"
+          >
+            <Printer className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />
+            <span>Imprimir Evaluaciones</span>
+          </button>
+        )}
+      </div>
 
       {Object.keys(gradesByTerm).length === 0 ? (
         <div className="text-center py-6 px-4 border border-dashed border-zinc-200/60 rounded-xl bg-zinc-50/30">
@@ -100,12 +116,12 @@ export function StudentGradesCard({
                                   : 'Curso'
                               }
                               evaluations={data.grades}
-                              allowPrintContainer={printSubjectId === subName}
+                              allowPrintContainer={false}
                               onClick={() => {
                                 setPrintSubjectId(subName)
                                 setTimeout(() => {
                                   window.print()
-                                }, 100)
+                                }, 150)
                               }}
                             />
                           </div>
