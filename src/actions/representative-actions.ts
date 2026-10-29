@@ -3,6 +3,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { ReportPaymentSchema } from '@/lib/schemas/payment.schema'
+import { isAdminRole } from '@/lib/permissions'
 
 export interface ReportPaymentState {
   error: string | null
@@ -112,5 +113,90 @@ export async function reportPaymentAction(
   } catch (err: any /* TODO: tipado pendiente */) {
     console.error('Error no controlado en reportPaymentAction:', err)
     return { error: 'Ocurrió un error inesperado al procesar la solicitud.', success: false }
+  }
+}
+
+/**
+ * Actualiza los datos de perfil (nombre, cédula, teléfono) de un representante/tutor.
+ * Solo puede ser ejecutada por personal administrativo (Admin / Coordinador) del mismo colegio.
+ */
+export async function updateRepresentativeAction(data: {
+  representativeId: string
+  fullName: string
+  cedula?: string | null
+  phone?: string | null
+}): Promise<{ error: string | null; success?: boolean }> {
+  try {
+    const supabase = await createClient()
+
+    // 1. Validar sesión
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      return { error: 'No autorizado. Por favor inicia sesión.', success: false }
+    }
+
+    // 2. Validar que el usuario tenga rol administrativo
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('school_id, role')
+      .eq('id', user.id)
+      .single()
+
+    if (profileError || !profile?.school_id || !isAdminRole(profile.role)) {
+      return { error: 'No tienes permisos para modificar representantes.', success: false }
+    }
+
+    const representativeId = data.representativeId?.trim()
+    const fullName = data.fullName?.trim()
+
+    if (!representativeId) {
+      return { error: 'Identificador de representante no válido.', success: false }
+    }
+
+    if (!fullName || fullName.length < 3) {
+      return { error: 'El nombre completo debe tener al menos 3 caracteres.', success: false }
+    }
+
+    const { createAdminClient } = await import('@/utils/supabase/admin')
+    const adminClient = createAdminClient()
+
+    // 3. Verificar que el representante pertenece al mismo colegio
+    const { data: targetRep, error: repError } = await adminClient
+      .from('profiles')
+      .select('id, school_id, role')
+      .eq('id', representativeId)
+      .single()
+
+    if (repError || !targetRep || targetRep.school_id !== profile.school_id) {
+      return { error: 'El representante no existe o no pertenece a tu colegio.', success: false }
+    }
+
+    // 4. Actualizar datos en profiles
+    const cleanCedula = data.cedula?.trim() || null
+    const cleanPhone = data.phone?.trim() || null
+
+    const { error: updateError } = await adminClient
+      .from('profiles')
+      .update({
+        full_name: fullName,
+        cedula: cleanCedula,
+        phone: cleanPhone,
+      })
+      .eq('id', representativeId)
+
+    if (updateError) {
+      console.error('Error al actualizar representante:', updateError)
+      return { error: 'Error al actualizar los datos en el sistema.', success: false }
+    }
+
+    revalidatePath('/admin/representantes')
+    return { error: null, success: true }
+  } catch (err: any) {
+    console.error('Error no controlado en updateRepresentativeAction:', err)
+    return { error: err.message || 'Error inesperado al guardar.', success: false }
   }
 }
