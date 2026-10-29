@@ -38,6 +38,11 @@ export const CreateEnrollmentRequestSchema = z.object({
     .trim()
     .min(5, 'Ingresa la cédula del representante')
     .max(25, 'La cédula no puede exceder 25 caracteres'),
+  parent_relationship: z
+    .string()
+    .trim()
+    .optional()
+    .or(z.literal('')),
   parent_phone: z
     .string()
     .trim()

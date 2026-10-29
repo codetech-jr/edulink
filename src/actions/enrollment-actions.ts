@@ -44,6 +44,7 @@ export async function createEnrollmentRequestAction(
     parent_cedula: formData.get('parent_cedula'),
     parent_phone: formData.get('parent_phone'),
     parent_email: formData.get('parent_email') || '',
+    parent_relationship: formData.get('parent_relationship') || 'madre',
     notes: formData.get('notes') || '',
   }
 
@@ -147,25 +148,42 @@ export async function createEnrollmentRequestAction(
     }
   }
 
-  // 4. Insertar la solicitud en enrollment_requests
-  const { data: requestRecord, error: insertError } = await adminClient
+  // 4. Insertar la solicitud en enrollment_requests (con fallback si no existe parent_relationship)
+  const baseEnrollmentData = {
+    school_id: school.id,
+    student_name: validation.data.student_name,
+    student_cedula: validation.data.student_cedula || null,
+    student_birth_date: validation.data.student_birth_date || null,
+    grade_requested: validation.data.grade_requested,
+    parent_name: validation.data.parent_name,
+    parent_cedula: validation.data.parent_cedula,
+    parent_phone: validation.data.parent_phone,
+    parent_email: validation.data.parent_email || null,
+    notes: validation.data.notes || null,
+    status: 'pendiente',
+    documents: documentsList,
+  }
+
+  const fullEnrollmentData = {
+    ...baseEnrollmentData,
+    parent_relationship: validation.data.parent_relationship || 'madre',
+  }
+
+  let { data: requestRecord, error: insertError } = await adminClient
     .from('enrollment_requests')
-    .insert({
-      school_id: school.id,
-      student_name: validation.data.student_name,
-      student_cedula: validation.data.student_cedula || null,
-      student_birth_date: validation.data.student_birth_date || null,
-      grade_requested: validation.data.grade_requested,
-      parent_name: validation.data.parent_name,
-      parent_cedula: validation.data.parent_cedula,
-      parent_phone: validation.data.parent_phone,
-      parent_email: validation.data.parent_email || null,
-      notes: validation.data.notes || null,
-      status: 'pendiente',
-      documents: documentsList,
-    })
+    .insert(fullEnrollmentData)
     .select('id')
     .single()
+
+  if (insertError && insertError.code === '42703') {
+    const retry = await adminClient
+      .from('enrollment_requests')
+      .insert(baseEnrollmentData)
+      .select('id')
+      .single()
+    requestRecord = retry.data
+    insertError = retry.error
+  }
 
   if (insertError || !requestRecord) {
     console.error('Error al insertar solicitud de inscripción:', insertError)
@@ -240,14 +258,46 @@ export async function approveEnrollmentRequestAction(
     return { error: 'Esta solicitud ya fue aprobada previamente.' }
   }
 
-  // 4. Crear el estudiante en la tabla students
+  // 4. Crear el estudiante en la tabla students y vincular/crear su representante
   const targetCourseId = courseId && courseId.trim() !== '' ? courseId : null
+
+  let parentId: string | null = null
+  if (requestData.parent_cedula) {
+    const { data: existingRep } = await adminClient
+      .from('profiles')
+      .select('id')
+      .eq('cedula', requestData.parent_cedula)
+      .eq('school_id', profile.school_id)
+      .maybeSingle()
+
+    if (existingRep) {
+      parentId = existingRep.id
+    } else {
+      const { data: newRep } = await adminClient
+        .from('profiles')
+        .insert({
+          school_id: profile.school_id,
+          full_name: requestData.parent_name,
+          cedula: requestData.parent_cedula,
+          phone: requestData.parent_phone,
+          role: 'representante',
+        })
+        .select('id')
+        .single()
+
+      if (newRep) {
+        parentId = newRep.id
+      }
+    }
+  }
 
   const { error: studentInsertError } = await adminClient.from('students').insert({
     school_id: profile.school_id,
     course_id: targetCourseId,
     full_name: requestData.student_name,
     cedula: requestData.student_cedula || null,
+    birth_date: requestData.student_birth_date || null,
+    parent_id: parentId,
     is_active: true,
   })
 

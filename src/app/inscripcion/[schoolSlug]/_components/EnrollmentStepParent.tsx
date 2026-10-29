@@ -9,6 +9,7 @@ interface EnrollmentStepParentProps {
     parent_cedula: string
     parent_phone: string
     parent_email: string
+    parent_relationship?: string
   }
   fieldErrors: Record<string, string>
   onChange: (
@@ -26,10 +27,10 @@ export function EnrollmentStepParent({
       <div>
         <h3 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
           <Users className="w-5 h-5 text-emerald-600" />
-          Información del Representante Legal
+          Información del Representante Legal o Tutor
         </h3>
         <p className="text-xs sm:text-sm text-slate-500 mt-1">
-          Datos de la madre, padre o tutor responsable de la matrícula escolar.
+          Datos de la madre, padre, abuelo(a), tío(a) o tutor(a) legal responsable del estudiante ante la institución.
         </p>
       </div>
 
@@ -40,7 +41,7 @@ export function EnrollmentStepParent({
             htmlFor="parent_name"
             className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2"
           >
-            Nombre y Apellido <span className="text-rose-500">*</span>
+            Nombre y Apellido del Tutor <span className="text-rose-500">*</span>
           </label>
           <input
             type="text"
@@ -48,7 +49,7 @@ export function EnrollmentStepParent({
             name="parent_name"
             value={formData.parent_name}
             onChange={onChange}
-            placeholder="Ej: Carlos Mendoza"
+            placeholder="Ej: Carmen Elena González"
             className={`w-full px-4 py-3 bg-slate-50/70 border rounded-xl text-slate-900 text-sm font-medium placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 transition-all min-h-[44px] ${
               fieldErrors.parent_name
                 ? 'border-rose-300 focus:ring-rose-400'
@@ -61,6 +62,34 @@ export function EnrollmentStepParent({
               {fieldErrors.parent_name}
             </p>
           )}
+        </div>
+
+        {/* Parentesco / Vínculo */}
+        <div>
+          <label
+            htmlFor="parent_relationship"
+            className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2"
+          >
+            Parentesco / Vínculo <span className="text-rose-500">*</span>
+          </label>
+          <select
+            id="parent_relationship"
+            name="parent_relationship"
+            value={formData.parent_relationship || 'madre'}
+            onChange={onChange}
+            className="w-full px-4 py-3 bg-slate-50/70 border border-slate-300 rounded-xl text-slate-900 text-sm font-medium focus:bg-white focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 transition-all min-h-[44px]"
+          >
+            <option value="madre">Madre</option>
+            <option value="padre">Padre</option>
+            <option value="abuela">Abuela</option>
+            <option value="abuelo">Abuelo</option>
+            <option value="tia">Tía</option>
+            <option value="tio">Tío</option>
+            <option value="hermana">Hermana mayor de edad</option>
+            <option value="hermano">Hermano mayor de edad</option>
+            <option value="tutor_legal">Tutor(a) Legal (LOPNNA / Poder)</option>
+            <option value="otro">Otro familiar responsable</option>
+          </select>
         </div>
 
         {/* Cédula representante */}

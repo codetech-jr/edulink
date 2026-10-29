@@ -50,6 +50,7 @@ export default async function StudentsManagementPage({
       full_name,
       cedula,
       gender,
+      birth_date,
       is_active,
       courses ( name, grade_level, section )
     `)

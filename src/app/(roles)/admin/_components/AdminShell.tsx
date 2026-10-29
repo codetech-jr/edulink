@@ -22,6 +22,8 @@ import {
   Lock,
   ChevronsLeft,
   ChevronsRight,
+  BarChart3,
+  UserCheck,
 } from 'lucide-react'
 
 interface AdminShellProps {
@@ -49,6 +51,16 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Alumnado',
     href: '/admin/students',
     icon: Users,
+  },
+  {
+    label: 'Representantes',
+    href: '/admin/representantes',
+    icon: UserCheck,
+  },
+  {
+    label: 'Estadísticas MPPE',
+    href: '/admin/estadisticas/edades',
+    icon: BarChart3,
   },
   {
     label: 'Inscripciones',

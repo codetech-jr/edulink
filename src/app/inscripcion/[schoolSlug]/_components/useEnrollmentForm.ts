@@ -10,6 +10,7 @@ export const INITIAL_FORM = {
   parent_cedula: '',
   parent_phone: '',
   parent_email: '',
+  parent_relationship: 'madre',
   notes: '',
 }
 
@@ -147,6 +148,7 @@ export function useEnrollmentForm(schoolSlug: string) {
         submitFormData.append('parent_cedula', formData.parent_cedula.trim())
         submitFormData.append('parent_phone', formData.parent_phone.trim().replace(/\D/g, ''))
         submitFormData.append('parent_email', formData.parent_email.trim())
+        submitFormData.append('parent_relationship', formData.parent_relationship || 'madre')
         submitFormData.append('notes', formData.notes.trim())
 
         documents.forEach((file) => {

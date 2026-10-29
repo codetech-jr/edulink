@@ -38,7 +38,7 @@ export default async function EditStudentPage({ params }: EditStudentPageProps) 
   // 2. Obtener datos del estudiante a editar
   const { data: student, error: studentError } = await supabase
     .from('students')
-    .select('id, full_name, cedula, course_id')
+    .select('id, full_name, cedula, course_id, birth_date, gender, parent_id')
     .eq('id', params.id)
     .eq('school_id', profile.school_id)
     .single()
@@ -53,6 +53,14 @@ export default async function EditStudentPage({ params }: EditStudentPageProps) 
     .select('id, name, section')
     .eq('school_id', profile.school_id)
     .order('name', { ascending: true })
+
+  // 4. Cargar lista de representantes registrados en el colegio
+  const { data: representatives } = await supabase
+    .from('profiles')
+    .select('id, full_name, cedula, phone')
+    .eq('school_id', profile.school_id)
+    .eq('role', 'representante')
+    .order('full_name', { ascending: true })
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -82,7 +90,11 @@ export default async function EditStudentPage({ params }: EditStudentPageProps) 
           </div>
 
           <div className="bg-white rounded-3xl shadow-xl shadow-blue-900/5 border border-gray-100 p-8 md:p-10">
-            <StudentForm courses={courses || []} initialData={student} />
+            <StudentForm
+              courses={courses || []}
+              representatives={representatives || []}
+              initialData={student}
+            />
           </div>
         </div>
       </main>

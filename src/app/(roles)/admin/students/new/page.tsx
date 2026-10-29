@@ -36,6 +36,14 @@ export default async function NewStudentPage() {
     .eq('school_id', profile.school_id)
     .order('name', { ascending: true })
 
+  // 3. Cargar lista de representantes registrados en el colegio
+  const { data: representatives } = await supabase
+    .from('profiles')
+    .select('id, full_name, cedula, phone')
+    .eq('school_id', profile.school_id)
+    .eq('role', 'representante')
+    .order('full_name', { ascending: true })
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header simplificado para enfoque en el formulario */}
@@ -61,16 +69,12 @@ export default async function NewStudentPage() {
         <div className="w-full max-w-xl">
           <div className="mb-8 text-center">
             <h1 className="text-3xl font-extrabold text-gray-900">Inscribir Nuevo Alumno</h1>
-            <p className="text-gray-600 mt-2">Completa los datos básicos para iniciar el registro académico.</p>
+            <p className="text-gray-600 mt-2">Completa los datos del estudiante y su representante o tutor legal.</p>
           </div>
 
           <div className="bg-white rounded-3xl shadow-xl shadow-blue-900/5 border border-gray-100 p-8 md:p-10">
-            <StudentForm courses={courses || []} />
+            <StudentForm courses={courses || []} representatives={representatives || []} />
           </div>
-
-          <p className="text-center text-xs text-gray-400 mt-8">
-            Los datos de contacto de representantes y asignación de cursos se realizarán en los siguientes pasos.
-          </p>
         </div>
       </main>
     </div>
