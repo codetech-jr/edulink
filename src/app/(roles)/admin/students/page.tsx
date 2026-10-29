@@ -6,7 +6,6 @@ import {
   ChevronRight,
   LogOut,
   LayoutDashboard,
-  MoreVertical,
   UserPlus,
   GraduationCap,
   Users,

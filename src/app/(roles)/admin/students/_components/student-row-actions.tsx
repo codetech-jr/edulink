@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { MoreVertical, Edit2, Trash2, X, AlertCircle } from 'lucide-react'
+import { Edit2, Trash2, AlertCircle } from 'lucide-react'
 import { deleteStudent } from '@/actions/student-actions'
 import Link from 'next/link'
 
@@ -11,7 +11,6 @@ interface StudentRowActionsProps {
 }
 
 export function StudentRowActions({ studentId, studentName }: StudentRowActionsProps) {
-  const [isOpen, setIsOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
 
@@ -28,46 +27,29 @@ export function StudentRowActions({ studentId, studentName }: StudentRowActionsP
   }
 
   return (
-    <div className="relative flex justify-end">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="p-2 text-gray-400 hover:text-blue-600 transition-colors rounded-lg hover:bg-blue-50"
-        aria-label={`Opciones para ${studentName}`}
+    <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+      <Link
+        href={`/admin/students/${studentId}/edit`}
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800 rounded-xl text-xs font-bold transition-all border border-blue-100/60 active:scale-95"
+        title={`Editar datos de ${studentName}`}
       >
-        <MoreVertical className="w-5 h-5" />
-      </button>
+        <Edit2 className="w-3.5 h-3.5 text-blue-600" />
+        <span>Editar</span>
+      </Link>
 
-      {isOpen && (
-        <>
-          <div 
-            className="fixed inset-0 z-20" 
-            onClick={() => setIsOpen(false)}
-          />
-          <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 py-2 z-30 animate-in fade-in slide-in-from-top-1">
-            <Link
-              href={`/admin/students/${studentId}/edit`}
-              className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              <Edit2 className="w-4 h-4 text-blue-600" />
-              Editar datos
-            </Link>
-            <button
-              onClick={() => {
-                setShowConfirm(true)
-                setIsOpen(false)
-              }}
-              className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors w-full text-left"
-            >
-              <Trash2 className="w-4 h-4" />
-              Eliminar
-            </button>
-          </div>
-        </>
-      )}
+      <button
+        type="button"
+        onClick={() => setShowConfirm(true)}
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 rounded-xl text-xs font-bold transition-all border border-red-100/60 active:scale-95"
+        title={`Eliminar a ${studentName}`}
+      >
+        <Trash2 className="w-3.5 h-3.5 text-red-600" />
+        <span>Eliminar</span>
+      </button>
 
       {showConfirm && (
         <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-8 shadow-2xl animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-2xl max-w-md w-full p-8 shadow-2xl animate-in zoom-in-95 duration-200 text-left">
             <div className="flex items-center gap-4 mb-6">
               <div className="bg-red-100 p-3 rounded-xl">
                 <AlertCircle className="w-8 h-8 text-red-600" />
@@ -84,6 +66,7 @@ export function StudentRowActions({ studentId, studentName }: StudentRowActionsP
 
             <div className="flex flex-col sm:flex-row gap-3">
               <button
+                type="button"
                 onClick={() => setShowConfirm(false)}
                 className="flex-1 px-6 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition-colors"
                 disabled={isDeleting}
@@ -91,6 +74,7 @@ export function StudentRowActions({ studentId, studentName }: StudentRowActionsP
                 Cancelar
               </button>
               <button
+                type="button"
                 onClick={handleDelete}
                 disabled={isDeleting}
                 className="flex-1 px-6 py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition-all shadow-lg shadow-red-100 disabled:opacity-50 flex items-center justify-center gap-2"
