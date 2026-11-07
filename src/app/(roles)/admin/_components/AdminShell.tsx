@@ -24,6 +24,7 @@ import {
   ChevronsRight,
   BarChart3,
   UserCheck,
+  CalendarCheck,
 } from 'lucide-react'
 
 interface AdminShellProps {
@@ -51,6 +52,11 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Alumnado',
     href: '/admin/students',
     icon: Users,
+  },
+  {
+    label: 'Asistencia',
+    href: '/admin/asistencia',
+    icon: CalendarCheck,
   },
   {
     label: 'Representantes',
@@ -219,7 +225,7 @@ export function AdminShell({
       {/* ── 1. Desktop Sidebar (Fijo con ancho colapsable) ── */}
       <aside
         className={cn(
-          'hidden md:flex md:flex-col md:fixed md:inset-y-0 md:left-0 md:z-30 border-r border-zinc-200/80 bg-white/95 backdrop-blur-xl pt-5 pb-4 transition-[width] duration-300 ease-in-out',
+          'hidden md:flex md:flex-col md:fixed md:inset-y-0 md:left-0 md:z-30 border-r border-zinc-200/80 bg-white/95 backdrop-blur-xl pt-5 pb-4 transition-[width] duration-300 ease-in-out print:hidden',
           isCollapsed ? 'md:w-[72px]' : 'md:w-64'
         )}
       >
@@ -372,12 +378,12 @@ export function AdminShell({
       {/* ── 3. Main Content Wrapper (Con padding-left dinámico) ── */}
       <main
         className={cn(
-          'transition-[padding-left] duration-300 ease-in-out min-h-screen flex flex-col',
+          'transition-[padding-left] duration-300 ease-in-out min-h-screen flex flex-col print:pl-0 print:m-0 print:min-h-0',
           isCollapsed ? 'md:pl-[72px]' : 'md:pl-64'
         )}
       >
         {/* Top Header con botón de colapsar << >> */}
-        <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-zinc-200/70 bg-white/80 px-4 md:px-8 backdrop-blur-xl">
+        <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-zinc-200/70 bg-white/80 px-4 md:px-8 backdrop-blur-xl print:hidden">
           {/* Lado izquierdo: Botón colapsar + Contexto institucional */}
           <div className="flex items-center gap-3">
             {/* Botón menú móvil */}
@@ -430,7 +436,7 @@ export function AdminShell({
         </header>
 
         {/* Contenido de la página actual */}
-        <div className="flex-1 p-6 md:p-8">
+        <div className="flex-1 p-6 md:p-8 print:p-0 print:m-0">
           {children}
         </div>
       </main>
